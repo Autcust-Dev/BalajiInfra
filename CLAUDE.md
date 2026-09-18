@@ -108,6 +108,19 @@ Never invent method names, config keys, or claims.
 
 ### Security
 9. **RLS enabled on every table**, with explicit policies. No table without policies.
+   The hosted Supabase project has the **Data API enabled**, **"automatically expose new
+   tables" disabled**, and **automatic RLS enabled** at the project level. Migrations must
+   not rely on those dashboard defaults, or on whatever the local CLI defaults to — each
+   migration must be correct on its own, matching the hosted project exactly:
+   - Every table's creation migration includes an explicit
+     `ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;`.
+   - Every table gets explicit `GRANT` statements to `anon` and/or `authenticated`, limited to
+     only the operations (`SELECT` / `INSERT` / `UPDATE` / `DELETE`) that role actually needs.
+     Never `GRANT ALL`. RLS policies then further restrict which rows are visible/writable.
+   - Internal-only tables — `audit_log`, `webhook_events`, and any future table with no direct
+     client access — get **no grants to `anon` or `authenticated` at all**. Only `service_role`
+     (used exclusively in Edge Functions) reads/writes them; `service_role` bypasses RLS and
+     grants by default, so no grant is needed for it.
 10. **Every RLS policy has pgTAP tests** proving both the allowed and the denied case
     (tenant A cannot read tenant B; tenant cannot approve KYC; non-admin cannot read
     KYC files; etc.). A policy without tests is not done.
