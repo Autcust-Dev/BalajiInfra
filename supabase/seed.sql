@@ -1,0 +1,2 @@
+-- Local dev seed data only. Fake data — never real tenant/PII data.
+-- Populated starting in Phase 1 once the core tables exist.

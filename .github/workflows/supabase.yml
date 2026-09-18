@@ -1,0 +1,41 @@
+name: supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/supabase.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/supabase.yml'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install Supabase CLI (root devDependency)
+        run: npm ci
+
+      - name: Start local Supabase stack (applies migrations + seed)
+        run: npx supabase start
+
+      - name: Run pgTAP tests
+        run: npx supabase test db
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop

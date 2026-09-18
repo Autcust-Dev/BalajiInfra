@@ -1,0 +1,12 @@
+{
+  "name": "balajiinfra",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hostel / PG management monorepo — tooling root. Supabase CLI is a dev dependency here; run it via `npx supabase`.",
+  "scripts": {
+    "supabase": "supabase"
+  },
+  "devDependencies": {
+    "supabase": "^2.117.0"
+  }
+}

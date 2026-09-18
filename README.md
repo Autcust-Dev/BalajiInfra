@@ -8,23 +8,25 @@ Supabase + Firebase backend. Full product and architecture rules live in
 
 ```
 /
+├── package.json  Root tooling only — holds the Supabase CLI devDependency
 ├── admin/        React + TypeScript admin panel (Vite, static SPA)
-├── app/          Flutter mobile app                    [pending — see below]
-├── supabase/     Supabase CLI project (migrations, functions, pgTAP tests)  [pending — see below]
-└── .github/workflows/  CI
+├── app/          Flutter mobile app                                        [pending — see below]
+└── supabase/     Supabase CLI project (migrations, functions, pgTAP tests)
 ```
 
-`app/` and `supabase/` are not scaffolded yet — they require the Flutter SDK and
-Supabase CLI respectively, which aren't part of this repo. See "Status" below.
+`app/` is not scaffolded yet — it requires the Flutter SDK, which isn't part of
+this repo. See "Status" below.
 
 ## Status
 
 - ✅ **admin/** — scaffolded (Vite + React 19 + TypeScript, Tailwind v4, shadcn/ui,
   TanStack Query/Table, React Router, react-hook-form + zod, Supabase JS client).
-- ⏳ **supabase/** — pending. Requires the [Supabase CLI](https://supabase.com/docs/guides/cli)
-  installed locally, then `supabase init` inside `supabase/`.
-- ⏳ **app/** — pending. Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install)
-  installed locally, then `flutter create app`.
+- ✅ **supabase/** — scaffolded (`supabase init`). Hosted project (Mumbai) is
+  connected via the Supabase GitHub integration — merges to `main` auto-deploy
+  migrations to production, so treat any PR touching `supabase/migrations/` as a
+  production change.
+- ⏳ **app/** — pending, paused. Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install)
+  installed locally, then `flutter create app` (existing Flutter code will be moved in).
 
 ## Local setup — admin panel
 
@@ -39,11 +41,31 @@ Other scripts: `npm run typecheck`, `npm run lint`, `npm run format:check`,
 `npm run test`, `npm run build`. All of these run in CI on every push/PR that
 touches `admin/` (see `.github/workflows/admin.yml`).
 
-## Local setup — supabase / app
+## Local setup — supabase
 
-Not available yet. Once the Supabase CLI and Flutter SDK are installed, these
-sections will be filled in with real setup steps (`supabase start`, migrations,
-`flutter run`, etc.) as part of the next scaffolding pass.
+The Supabase CLI is **not** installed globally — it's a root `devDependency`,
+invoked via `npx`:
+
+```
+npm install                 # installs the Supabase CLI (root package.json)
+npx supabase start          # requires Docker Desktop running
+npx supabase status
+npx supabase stop
+```
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
+locally. If `docker`/`npx supabase start` can't find Docker even though Docker
+Desktop is running, its CLI usually isn't on `PATH` — add Docker Desktop's
+`resources\bin` directory (check where Docker Desktop is actually installed; on
+Windows this can be a per-user install under `%LOCALAPPDATA%\Programs\DockerDesktop`
+rather than `Program Files`) to your `PATH` and restart your terminal.
+
+Local URLs after `npx supabase start`: Studio at `http://127.0.0.1:54323`, API at
+`http://127.0.0.1:54321`, Postgres at `127.0.0.1:54322`.
+
+## Local setup — app (pending)
+
+Not available yet — see "Status" above.
 
 ## Contributing
 

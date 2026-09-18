@@ -35,9 +35,10 @@ Core rules of the product:
 ```
 /
 ├── CLAUDE.md
+├── package.json  Root tooling only — holds the Supabase CLI devDependency
 ├── app/          Flutter mobile app
 ├── admin/        React + TypeScript admin panel (Vite, static site)
-├── supabase/     Supabase CLI project
+├── supabase/     Supabase CLI project (run via `npx supabase` from repo root)
 │   ├── migrations/   SQL migrations (ONLY way to change the schema)
 │   ├── functions/    Edge Functions (TypeScript / Deno)
 │   ├── tests/        pgTAP database tests (RLS + constraints)
@@ -56,6 +57,13 @@ Core rules of the product:
 - Edge Functions (TypeScript): Razorpay, admin-privileged operations, anything that
   needs a secret key.
 - Supabase Auth (email + password + **TOTP MFA required**) — **admins only**.
+- Hosted project (Mumbai) is connected to this repo via the Supabase GitHub integration
+  (production branch `main`, deploy-to-production **on**). Every migration merged to
+  `main` is applied to the live database automatically — get explicit human confirmation
+  before merging a migration-bearing change.
+- **Supabase CLI is a root `devDependency`** (`npm install supabase --save-dev` at the
+  repo root), invoked as `npx supabase <command>` from the repo root — not a global
+  install. Requires Docker Desktop running locally for `supabase start`.
 
 **Firebase**
 - Firebase Phone Auth — **tenants only**. Connected to Supabase via Supabase
