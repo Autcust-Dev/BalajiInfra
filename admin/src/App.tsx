@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { StatusGate } from '@/components/auth/StatusGate'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/routes/LoginPage'
 import { MfaEnrollPage } from '@/routes/MfaEnrollPage'
@@ -12,9 +13,30 @@ import { TenantsPage } from '@/routes/TenantsPage'
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/mfa/enroll" element={<MfaEnrollPage />} />
-      <Route path="/mfa/verify" element={<MfaVerifyPage />} />
+      <Route
+        path="/login"
+        element={
+          <StatusGate when="signed-out">
+            <LoginPage />
+          </StatusGate>
+        }
+      />
+      <Route
+        path="/mfa/enroll"
+        element={
+          <StatusGate when="mfa-enroll">
+            <MfaEnrollPage />
+          </StatusGate>
+        }
+      />
+      <Route
+        path="/mfa/verify"
+        element={
+          <StatusGate when="mfa-verify">
+            <MfaVerifyPage />
+          </StatusGate>
+        }
+      />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>

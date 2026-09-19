@@ -300,9 +300,13 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# Enabled: admins require TOTP MFA (CLAUDE.md §4 rule 15; enforced server-side by
+# is_admin() requiring aal2). The hosted project's equivalent (Authentication > MFA in the
+# Supabase dashboard) needs to be confirmed/enabled separately — config.toml only
+# configures the local CLI stack, it doesn't push auth settings to the hosted project.
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
