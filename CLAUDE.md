@@ -138,10 +138,29 @@ Never invent method names, config keys, or claims.
     names. Supabase secrets via `supabase secrets set`.
 13. Tenant identity: Firebase UIDs are **not UUIDs**. Never use `auth.uid()` for
     tenants — use `auth.jwt() ->> 'sub'` and `auth.jwt() ->> 'phone_number'`.
-    Tenant policies must also check the token issuer is our Firebase project
-    (`iss` / `aud`). Put this logic in helper SQL functions
-    (`is_tenant()`, `current_tenant_id()`, `is_admin()`), `security definer`,
+    (`auth.uid()` itself force-casts `sub` to `uuid`, which throws for a non-uuid Firebase
+    `sub` — a real bug caught in Phase 1. `is_admin()` runs on every table's RLS check,
+    including tables tenants query, so it must never call `auth.uid()` either; it goes
+    through `_jwt_sub_as_uuid()`, which returns null instead of raising for a non-uuid
+    `sub`.) Tenant policies must also check the token issuer is our Firebase project
+    (`iss` / `aud`) — implemented in Phase 1 as `iss = https://securetoken.google.com/<id>`,
+    `aud = <id>`, the standard raw-Firebase-ID-token shape. Put this logic in helper SQL
+    functions (`is_tenant()`, `current_tenant_id()`, `is_admin()`), `security definer`,
     `stable`, with a fixed `search_path`.
+
+    The Firebase project id itself is **not hardcoded anywhere** — it's the single row
+    `app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`. Starts as
+    JSON `null` (fail-closed: `is_tenant()` returns false for everyone until this is set).
+    `supabase/seed.sql` overwrites it locally with a fake value for tests; the hosted value
+    was set once via the Studio SQL editor after the Firebase project was created (§8).
+    This must never be pushed as a migration — not because migrations re-run (a migration
+    runs exactly once per database, tracked in Supabase's migration history table, never
+    repeated on later deploys), but because the same migration file applies identically to
+    *every* environment. A value written into a migration is the same value everywhere,
+    which defeats the whole point of an environment-specific setting (fake locally, real on
+    hosted). `app_config` is readable by `anon` — **never store secrets there**; secrets
+    (API keys, webhook signing secrets, etc.) go through `supabase secrets set` (rule 12),
+    never a table.
 14. Supabase third-party auth with Firebase may require a `role: authenticated`
     custom claim on Firebase tokens (set via Firebase blocking function or Admin SDK).
     **Verify current Supabase docs and implement exactly what they require.**

@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'supabase/**'
+      - 'admin/src/types/database.types.ts'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/supabase.yml'
   pull_request:
     paths:
       - 'supabase/**'
+      - 'admin/src/types/database.types.ts'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/supabase.yml'
@@ -35,6 +37,18 @@ jobs:
 
       - name: Run pgTAP tests
         run: npx supabase test db
+
+      - name: Check generated types are up to date with migrations
+        run: |
+          npx supabase gen types typescript --local > /tmp/database.types.ts
+          diff /tmp/database.types.ts admin/src/types/database.types.ts || {
+            echo "::error::admin/src/types/database.types.ts is out of date. Run: npx supabase gen types typescript --local > admin/src/types/database.types.ts (and copy it to supabase/functions/_shared/)";
+            exit 1;
+          }
+          diff /tmp/database.types.ts supabase/functions/_shared/database.types.ts || {
+            echo "::error::supabase/functions/_shared/database.types.ts is out of date or out of sync with admin/src/types/database.types.ts";
+            exit 1;
+          }
 
       - name: Stop local Supabase stack
         if: always()
