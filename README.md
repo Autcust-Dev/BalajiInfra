@@ -72,18 +72,23 @@ Firebase project id — this is **not hardcoded** in any function. It's a single
 - **Local / tests**: `supabase/seed.sql` sets it to the fake value
   `balajiinfra-local-dev` (applied automatically by `supabase start`/`db reset`).
   pgTAP tests mock tenant JWTs with matching `aud`/`iss` claims.
-- **Hosted**: starts as JSON `null` (fail-closed — Firebase tenant login simply
-  doesn't work until this is set, rather than trusting an unconfigured issuer). Once
-  the Firebase project exists (a human task, see `CLAUDE.md` §8), set the real value
-  **once**, directly against the hosted database (Studio SQL editor), never as a
-  migration:
+- **Hosted**: started as JSON `null` (fail-closed — Firebase tenant login simply
+  doesn't work until this is set, rather than trusting an unconfigured issuer). Set
+  **once** the Firebase project existed (a human task, see `CLAUDE.md` §8), directly
+  against the hosted database (Studio SQL editor), never as a migration:
   ```sql
   update public.app_config set value = '"<real-firebase-project-id>"'::jsonb
   where key = 'firebase_project_id';
   ```
-  A migration would apply the same value to every environment identically, so it must
-  never carry the real project id — that would also reset the hosted value back to
-  `null` on every future deploy.
+  This is a data change, not a schema change — it stays out of migrations because a
+  migration file applies identically to every environment (local and hosted both run
+  the exact same SQL), so a value written into one would be the same value everywhere,
+  defeating the point of an environment-specific setting. (Migrations themselves each
+  run exactly once per database, tracked in Supabase's migration history — they don't
+  re-run on later deploys.)
+
+  **`app_config` is readable by `anon`** — never put a secret in it. API keys, webhook
+  signing secrets, etc. go through `supabase secrets set`, never a table.
 
 ## Local setup — app (pending)
 

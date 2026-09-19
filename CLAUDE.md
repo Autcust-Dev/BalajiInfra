@@ -152,9 +152,15 @@ Never invent method names, config keys, or claims.
     `app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`. Starts as
     JSON `null` (fail-closed: `is_tenant()` returns false for everyone until this is set).
     `supabase/seed.sql` overwrites it locally with a fake value for tests; the hosted value
-    is set once via the Studio SQL editor after the Firebase project exists (§8) and must
-    never be pushed as a migration (a migration runs on every environment identically, so
-    it would reset the hosted value back to null on every deploy).
+    was set once via the Studio SQL editor after the Firebase project was created (§8).
+    This must never be pushed as a migration — not because migrations re-run (a migration
+    runs exactly once per database, tracked in Supabase's migration history table, never
+    repeated on later deploys), but because the same migration file applies identically to
+    *every* environment. A value written into a migration is the same value everywhere,
+    which defeats the whole point of an environment-specific setting (fake locally, real on
+    hosted). `app_config` is readable by `anon` — **never store secrets there**; secrets
+    (API keys, webhook signing secrets, etc.) go through `supabase secrets set` (rule 12),
+    never a table.
 14. Supabase third-party auth with Firebase may require a `role: authenticated`
     custom claim on Firebase tokens (set via Firebase blocking function or Admin SDK).
     **Verify current Supabase docs and implement exactly what they require.**
