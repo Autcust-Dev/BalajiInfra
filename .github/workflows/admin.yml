@@ -1,46 +1,60 @@
 name: admin
 
+# Always triggers (no path filter on `on:`) so this is never a required check that's
+# simply absent from a PR's check list — GitHub blocks merges forever on a required check
+# that never ran, but treats a job skipped via `if:` as passing. The paths-filter step
+# below decides, at run time, whether the real steps run or are skipped.
 on:
   push:
     branches: [main]
-    paths:
-      - 'admin/**'
-      - '.github/workflows/admin.yml'
   pull_request:
-    paths:
-      - 'admin/**'
-      - '.github/workflows/admin.yml'
-
-defaults:
-  run:
-    working-directory: admin
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            admin:
+              - 'admin/**'
+              - '.github/workflows/admin.yml'
 
       - uses: actions/setup-node@v4
+        if: steps.filter.outputs.admin == 'true'
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: admin/package-lock.json
 
       - name: Install dependencies
+        if: steps.filter.outputs.admin == 'true'
         run: npm ci
 
       - name: Type check
+        if: steps.filter.outputs.admin == 'true'
         run: npm run typecheck
 
       - name: Lint
+        if: steps.filter.outputs.admin == 'true'
         run: npm run lint
 
       - name: Format check
+        if: steps.filter.outputs.admin == 'true'
         run: npm run format:check
 
       - name: Unit tests
+        if: steps.filter.outputs.admin == 'true'
         run: npm run test
 
       - name: Build
+        if: steps.filter.outputs.admin == 'true'
         run: npm run build
