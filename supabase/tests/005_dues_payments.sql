@@ -5,7 +5,8 @@ set local role authenticated;
 
 -- Tenant A (approved, active) can read their own due, not anyone else's.
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001'
+  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select results_eq(
   $$ select id from public.dues $$,
@@ -32,7 +33,8 @@ select throws_ok(
 
 -- Tenant B (not yet approved) has zero access to dues/payments.
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002'
+  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select is_empty(
   $$ select * from public.dues $$,

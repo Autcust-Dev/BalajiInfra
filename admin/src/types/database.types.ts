@@ -509,6 +509,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _firebase_project_id: { Args: never; Returns: string }
       _jwt_sub_as_uuid: { Args: never; Returns: string }
       current_tenant_id: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }

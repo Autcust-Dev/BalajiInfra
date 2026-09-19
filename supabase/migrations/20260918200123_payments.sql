@@ -22,6 +22,8 @@ create table public.payments (
 alter table public.payments enable row level security;
 
 grant select, insert, update on public.payments to authenticated;
+-- create-order and razorpay-webhook Edge Functions need this directly.
+grant select, insert, update on public.payments to service_role;
 
 create policy "admin full access" on public.payments
   for all

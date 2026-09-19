@@ -22,6 +22,7 @@ create table public.kyc_submissions (
 alter table public.kyc_submissions enable row level security;
 
 grant select, insert, update on public.kyc_submissions to authenticated;
+grant select, insert, update on public.kyc_submissions to service_role;
 
 create policy "admin full access" on public.kyc_submissions
   for all

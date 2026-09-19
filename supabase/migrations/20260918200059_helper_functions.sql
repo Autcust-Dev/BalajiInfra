@@ -72,12 +72,20 @@ $$;
 
 -- True for a Firebase-authenticated tenant session. Matches the JWT's `sub` (Firebase UID)
 -- and `phone_number` claims against a `tenants` row, per CLAUDE.md §4 rule 13: Firebase UIDs
--- are not UUIDs, so tenants are never identified via auth.uid().
+-- are not UUIDs, so tenants are never identified via auth.uid(). Also checks the token
+-- issuer/audience against our Firebase project id (rule 13), read from a single
+-- app_config row rather than hardcoded here — see public._firebase_project_id() and the
+-- comment on it in the app_config migration for how that value is set per environment.
 --
--- TODO(Phase 3): once Supabase third-party auth (Firebase provider) is wired up, tighten
--- this to also check the token issuer (`iss`/`aud`) matches our Firebase project, per rule
--- 13 and rule 14 — deferred until that config exists and the exact claim shape is verified
--- against current Supabase docs.
+-- References public._firebase_project_id() and public.app_config, both defined in a later
+-- migration — fine for a plpgsql body, which (unlike `language sql`) isn't validated
+-- against the catalog until it's actually called, by which point every migration has run.
+--
+-- NOTE(Phase 3): this checks the standard raw-Firebase-ID-token shape
+-- (iss = https://securetoken.google.com/<project-id>, aud = <project-id>). Once Supabase
+-- third-party auth (Firebase provider) is actually wired up, verify against current
+-- Supabase docs that it passes these claims through unchanged rather than remapping them,
+-- per rule 14 — adjust here if not.
 create or replace function public.is_tenant()
 returns boolean
 language plpgsql
@@ -85,8 +93,15 @@ security definer
 stable
 set search_path = ''
 as $$
+declare
+  v_project_id text;
 begin
-  return coalesce((auth.jwt() ->> 'role'), '') = 'authenticated'
+  v_project_id := public._firebase_project_id();
+
+  return v_project_id is not null
+    and coalesce((auth.jwt() ->> 'role'), '') = 'authenticated'
+    and coalesce((auth.jwt() ->> 'aud') = v_project_id, false)
+    and coalesce((auth.jwt() ->> 'iss') = ('https://securetoken.google.com/' || v_project_id), false)
     and exists (
       select 1
       from public.tenants t

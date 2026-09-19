@@ -63,6 +63,28 @@ rather than `Program Files`) to your `PATH` and restart your terminal.
 Local URLs after `npx supabase start`: Studio at `http://127.0.0.1:54323`, API at
 `http://127.0.0.1:54321`, Postgres at `127.0.0.1:54322`.
 
+### Configuring the Firebase project id
+
+Tenant RLS policies (`is_tenant()`) check the JWT's `iss`/`aud` claims against the
+Firebase project id — this is **not hardcoded** in any function. It's a single row,
+`app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`.
+
+- **Local / tests**: `supabase/seed.sql` sets it to the fake value
+  `balajiinfra-local-dev` (applied automatically by `supabase start`/`db reset`).
+  pgTAP tests mock tenant JWTs with matching `aud`/`iss` claims.
+- **Hosted**: starts as JSON `null` (fail-closed — Firebase tenant login simply
+  doesn't work until this is set, rather than trusting an unconfigured issuer). Once
+  the Firebase project exists (a human task, see `CLAUDE.md` §8), set the real value
+  **once**, directly against the hosted database (Studio SQL editor), never as a
+  migration:
+  ```sql
+  update public.app_config set value = '"<real-firebase-project-id>"'::jsonb
+  where key = 'firebase_project_id';
+  ```
+  A migration would apply the same value to every environment identically, so it must
+  never carry the real project id — that would also reset the hosted value back to
+  `null` on every future deploy.
+
 ## Local setup — app (pending)
 
 Not available yet — see "Status" above.

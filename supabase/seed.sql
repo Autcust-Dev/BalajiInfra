@@ -2,6 +2,13 @@
 -- Fixed UUIDs throughout so pgTAP tests (supabase/tests/) can reference fixtures
 -- deterministically without querying back generated ids.
 
+-- Local-only override of the app_config-driven Firebase project id (see the comment on
+-- this row in the app_config migration). This value never reaches the hosted database —
+-- seed.sql only runs locally. Tests mock tenant JWTs with matching aud/iss claims.
+update public.app_config
+set value = '"balajiinfra-local-dev"'::jsonb
+where key = 'firebase_project_id';
+
 -- Two Supabase Auth users for the two admins below. Minimal columns needed for GoTrue to
 -- consider these valid local users; password/MFA enrollment isn't seedable this way, so
 -- pgTAP tests simulate aal2 via mocked JWT claims rather than a real TOTP flow.
@@ -26,6 +33,14 @@ insert into public.properties (id, name, address) values
 insert into public.rooms (id, property_id, room_number, capacity) values
   ('44444444-4444-4444-4444-444444444444', '33333333-3333-3333-3333-333333333333', '101', 2),
   ('55555555-5555-5555-5555-555555555555', '33333333-3333-3333-3333-333333333333', '102', 2);
+
+-- A second, unrelated property/room with no tenants at all — purely so tests can prove a
+-- tenant cannot read a property/room that isn't their own.
+insert into public.properties (id, name, address) values
+  ('99999999-9999-9999-9999-999999999999', 'Other Fake PG Chennai', '456 Other Street, Chennai');
+
+insert into public.rooms (id, property_id, room_number, capacity) values
+  ('e0000000-0000-0000-0000-000000000000', '99999999-9999-9999-9999-999999999999', '201', 2);
 
 -- Tenant A: active, KYC approved — should have full main-app access (dues/payments).
 insert into public.tenants (

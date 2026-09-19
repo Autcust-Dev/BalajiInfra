@@ -18,6 +18,7 @@ create table public.dues (
 alter table public.dues enable row level security;
 
 grant select, insert, update on public.dues to authenticated;
+grant select, insert, update on public.dues to service_role;
 
 create policy "admin full access" on public.dues
   for all

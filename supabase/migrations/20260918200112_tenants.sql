@@ -18,6 +18,9 @@ create table public.tenants (
 alter table public.tenants enable row level security;
 
 grant select, insert, update, delete on public.tenants to authenticated;
+-- Trusted backend role — e.g. links firebase_uid on first login (Phase 3). Bypasses the
+-- tenant_update_guard trigger below (it only restricts the literal `authenticated` role).
+grant select, insert, update, delete on public.tenants to service_role;
 
 create policy "admin full access" on public.tenants
   for all

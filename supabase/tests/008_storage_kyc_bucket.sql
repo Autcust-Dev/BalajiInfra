@@ -6,7 +6,8 @@ set local role authenticated;
 -- Tenant A has no kyc_submissions row yet (seed only gives tenant B one), so nothing blocks
 -- a first upload into their own folder.
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001'
+  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select lives_ok(
   $$ insert into storage.objects (bucket_id, name)
@@ -28,7 +29,8 @@ select isnt_empty(
 -- Tenant B already has a kyc_submissions row with status = submitted (from seed), which
 -- blocks further uploads until it's not_started/rejected (CLAUDE.md §4 rule 20).
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002'
+  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select throws_ok(
   $$ insert into storage.objects (bucket_id, name)

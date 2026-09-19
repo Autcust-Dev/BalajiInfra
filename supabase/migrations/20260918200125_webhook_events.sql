@@ -14,7 +14,10 @@ create table public.webhook_events (
 alter table public.webhook_events enable row level security;
 
 -- No grants to anon/authenticated (CLAUDE.md §4 rule 9 addendum). RLS is enabled with zero
--- policies as a second layer of defense.
+-- policies as a second layer of defense. service_role's BYPASSRLS attribute skips RLS but
+-- NOT the base table privilege system, so it still needs its own explicit grant here —
+-- without it, the razorpay-webhook Edge Function has no access to this table at all.
+grant select, insert, update on public.webhook_events to service_role;
 
 create trigger set_updated_at
   before update on public.webhook_events

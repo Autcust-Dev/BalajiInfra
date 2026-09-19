@@ -15,6 +15,7 @@ create table public.consents (
 alter table public.consents enable row level security;
 
 grant select, insert on public.consents to authenticated;
+grant select, insert on public.consents to service_role;
 
 create policy "admin reads all" on public.consents
   for select

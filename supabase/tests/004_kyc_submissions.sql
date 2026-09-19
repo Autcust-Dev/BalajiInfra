@@ -6,7 +6,8 @@ set local role authenticated;
 -- Tenant B (kyc_status = submitted, not yet approved) can read their own tenant row,
 -- consents, and kyc_submissions even though not approved (CLAUDE.md Phase 1 addition).
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002'
+  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select isnt_empty(
   $$ select * from public.tenants where id = '77777777-7777-7777-7777-777777777777' $$,
@@ -42,7 +43,8 @@ update public.kyc_submissions set status = 'rejected', reviewed_by = 'a1111111-1
 where tenant_id = '77777777-7777-7777-7777-777777777777';
 
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002'
+  'sub', 'firebase-tenant-pending', 'role', 'authenticated', 'phone_number', '+919876500002',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select throws_ok(
   $$ update public.kyc_submissions set status = 'submitted', rejection_reason = null

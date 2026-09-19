@@ -6,7 +6,8 @@ set local role authenticated;
 -- Tenant A (approved, active) reads only their own row, not tenant B's or the moved-out
 -- tenant's.
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001'
+  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select results_eq(
   $$ select id from public.tenants order by id $$,
@@ -16,7 +17,8 @@ select results_eq(
 
 -- Tenant with status = moved_out: no access at all, even to their own row.
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-movedout', 'role', 'authenticated', 'phone_number', '+919876500003'
+  'sub', 'firebase-tenant-movedout', 'role', 'authenticated', 'phone_number', '+919876500003',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select is_empty(
   $$ select * from public.tenants $$,
@@ -25,7 +27,8 @@ select is_empty(
 
 -- Tenant A may update fcm_token on their own row.
 select set_config('request.jwt.claims', json_build_object(
-  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001'
+  'sub', 'firebase-tenant-approved', 'role', 'authenticated', 'phone_number', '+919876500001',
+  'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select lives_ok(
   $$ update public.tenants set fcm_token = 'fake-fcm-token' where id = '66666666-6666-6666-6666-666666666666' $$,

@@ -15,9 +15,13 @@ create table public.audit_log (
 
 alter table public.audit_log enable row level security;
 
--- No grants to anon/authenticated at all (CLAUDE.md §4 rule 9 addendum): only
--- service_role (Edge Functions) and this table's own security definer trigger function
--- ever touch it. RLS is enabled with zero policies as a second layer of defense.
+-- No grants to anon/authenticated at all (CLAUDE.md §4 rule 9 addendum). The trigger below
+-- is security definer, so it inserts as its owner (postgres) regardless of the invoking
+-- role's grants — it does NOT need service_role granted here to keep working. service_role
+-- gets SELECT only (e.g. a future admin-facing audit viewer Edge Function), no
+-- insert/update/delete: nothing but the trigger itself should ever write a row.
+grant select on public.audit_log to service_role;
+-- RLS is enabled with zero policies as a second layer of defense.
 
 -- Generic row-audit trigger, attached to every table that needs it. `security definer` so
 -- it can insert into audit_log even though the invoking role (authenticated, as an admin)
