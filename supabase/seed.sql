@@ -66,11 +66,11 @@ insert into public.tenants (
 -- Tenant C: moved out — no access at all, even though KYC was approved while active.
 insert into public.tenants (
   id, property_id, room_id, full_name, phone, firebase_uid, status, kyc_status,
-  move_in_date, monthly_rent_paise
+  move_in_date, move_out_date, monthly_rent_paise
 ) values (
   '88888888-8888-8888-8888-888888888888', '33333333-3333-3333-3333-333333333333',
   '44444444-4444-4444-4444-444444444444', 'Fake Tenant Moved Out', '+919876500003',
-  'firebase-tenant-movedout', 'moved_out', 'approved', '2025-06-01', 1000000
+  'firebase-tenant-movedout', 'moved_out', 'approved', '2025-06-01', '2026-06-01', 1000000
 );
 
 insert into public.kyc_submissions (

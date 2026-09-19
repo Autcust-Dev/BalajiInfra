@@ -421,6 +421,7 @@ export type Database = {
           kyc_status: Database["public"]["Enums"]["kyc_status"]
           monthly_rent_paise: number
           move_in_date: string
+          move_out_date: string | null
           phone: string
           property_id: string
           room_id: string
@@ -436,6 +437,7 @@ export type Database = {
           kyc_status?: Database["public"]["Enums"]["kyc_status"]
           monthly_rent_paise: number
           move_in_date: string
+          move_out_date?: string | null
           phone: string
           property_id: string
           room_id: string
@@ -451,6 +453,7 @@ export type Database = {
           kyc_status?: Database["public"]["Enums"]["kyc_status"]
           monthly_rent_paise?: number
           move_in_date?: string
+          move_out_date?: string | null
           phone?: string
           property_id?: string
           room_id?: string
