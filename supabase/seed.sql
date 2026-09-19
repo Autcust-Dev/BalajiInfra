@@ -9,19 +9,27 @@ update public.app_config
 set value = '"balajiinfra-local-dev"'::jsonb
 where key = 'firebase_project_id';
 
--- Two Supabase Auth users for the two admins below. Minimal columns needed for GoTrue to
--- consider these valid local users; password/MFA enrollment isn't seedable this way, so
--- pgTAP tests simulate aal2 via mocked JWT claims rather than a real TOTP flow.
+-- Two Supabase Auth users for the two admins below, real enough to actually log in with
+-- via the Supabase JS client (not just pgTAP-mocked JWTs) — useful for manually exercising
+-- the admin panel's login/MFA flow locally. The token/change columns below have no default
+-- in the auth.users schema (they default to NULL), but GoTrue's Go driver can't scan NULL
+-- into them — it expects '' — so every dashboard/signup-created user has them as '', and a
+-- raw INSERT must set them explicitly too, or every login attempt 500s with "error finding
+-- user: sql: Scan error ... converting NULL to string is unsupported" (caught locally by
+-- actually driving the login page in a browser, not just pgTAP).
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
-  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change_token_new, email_change
 ) values
   ('00000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
    'authenticated', 'authenticated', 'owner@example.test', crypt('local-dev-only', gen_salt('bf')),
-   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}'),
+   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222',
    'authenticated', 'authenticated', 'staff@example.test', crypt('local-dev-only', gen_salt('bf')),
-   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}');
+   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', '');
 
 insert into public.admins (id, user_id, name, role, active) values
   ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Fake Owner', 'owner', true),
