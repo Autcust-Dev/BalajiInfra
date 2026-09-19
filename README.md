@@ -21,6 +21,9 @@ this repo. See "Status" below.
 
 - ✅ **admin/** — scaffolded (Vite + React 19 + TypeScript, Tailwind v4, shadcn/ui,
   TanStack Query/Table, React Router, react-hook-form + zod, Supabase JS client).
+  Phase 2 (auth + MFA, protected layout, properties/rooms, tenant list/add/edit/move-out)
+  built and verified end-to-end against the local stack (real login, real TOTP
+  enrollment/verification, RLS-driven owner/staff UI differences).
 - ✅ **supabase/** — scaffolded (`supabase init`). Hosted project (Mumbai) is
   connected via the Supabase GitHub integration — merges to `main` auto-deploy
   migrations to production, so treat any PR touching `supabase/migrations/` as a
@@ -36,6 +39,13 @@ npm install
 cp .env.example .env.local   # fill in your Supabase project URL + anon key
 npm run dev
 ```
+
+**During development, `admin/.env.local` must point at the local Supabase instance
+(`http://127.0.0.1:54321` + the local anon key printed by `npx supabase start`), never
+the hosted project** — `admins` rows and MFA factors are per-project, so testing against
+hosted from a dev machine would touch real (or at least production-adjacent) auth state.
+`.env.local` is gitignored; there's nothing stopping it from pointing at hosted, so this
+is a habit, not something enforced by tooling.
 
 Other scripts: `npm run typecheck`, `npm run lint`, `npm run format:check`,
 `npm run test`, `npm run build`. All of these run in CI on every push/PR that
@@ -89,6 +99,30 @@ Firebase project id — this is **not hardcoded** in any function. It's a single
 
   **`app_config` is readable by `anon`** — never put a secret in it. API keys, webhook
   signing secrets, etc. go through `supabase secrets set`, never a table.
+
+## Admin operations
+
+### An admin lost their MFA device — removing their factor so they can re-enroll
+
+There's no in-app UI for this (owners manage this out-of-band, not through the admin
+panel itself). The admin panel has no signup — an admin's account already exists, so
+"lost 2FA" means their next login gets stuck at the `/mfa/verify` challenge with no way
+forward. An owner needs to delete their TOTP factor so the next login routes them to
+enrollment instead.
+
+- **Supabase Studio (recommended)**: Authentication → Users → find the admin by email →
+  their MFA factors are listed on the user detail page → delete the factor. (Local:
+  `http://127.0.0.1:54323`. Hosted: the project's dashboard.)
+- **SQL fallback**, if Studio's UI doesn't expose it (run in the Studio SQL editor, which
+  connects as `postgres` and bypasses RLS — this is not something to expose through the
+  app itself):
+  ```sql
+  delete from auth.mfa_factors where user_id = (
+    select id from auth.users where email = 'the-admin@example.com'
+  );
+  ```
+  Their next login attempt will find no enrolled factor and land on the enrollment
+  screen automatically — no other cleanup needed.
 
 ## Local setup — app (pending)
 

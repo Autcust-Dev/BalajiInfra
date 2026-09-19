@@ -9,19 +9,27 @@ update public.app_config
 set value = '"balajiinfra-local-dev"'::jsonb
 where key = 'firebase_project_id';
 
--- Two Supabase Auth users for the two admins below. Minimal columns needed for GoTrue to
--- consider these valid local users; password/MFA enrollment isn't seedable this way, so
--- pgTAP tests simulate aal2 via mocked JWT claims rather than a real TOTP flow.
+-- Two Supabase Auth users for the two admins below, real enough to actually log in with
+-- via the Supabase JS client (not just pgTAP-mocked JWTs) — useful for manually exercising
+-- the admin panel's login/MFA flow locally. The token/change columns below have no default
+-- in the auth.users schema (they default to NULL), but GoTrue's Go driver can't scan NULL
+-- into them — it expects '' — so every dashboard/signup-created user has them as '', and a
+-- raw INSERT must set them explicitly too, or every login attempt 500s with "error finding
+-- user: sql: Scan error ... converting NULL to string is unsupported" (caught locally by
+-- actually driving the login page in a browser, not just pgTAP).
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
-  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change_token_new, email_change
 ) values
   ('00000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
    'authenticated', 'authenticated', 'owner@example.test', crypt('local-dev-only', gen_salt('bf')),
-   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}'),
+   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222',
    'authenticated', 'authenticated', 'staff@example.test', crypt('local-dev-only', gen_salt('bf')),
-   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}');
+   now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', '');
 
 insert into public.admins (id, user_id, name, role, active) values
   ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Fake Owner', 'owner', true),
@@ -66,11 +74,11 @@ insert into public.tenants (
 -- Tenant C: moved out — no access at all, even though KYC was approved while active.
 insert into public.tenants (
   id, property_id, room_id, full_name, phone, firebase_uid, status, kyc_status,
-  move_in_date, monthly_rent_paise
+  move_in_date, move_out_date, monthly_rent_paise
 ) values (
   '88888888-8888-8888-8888-888888888888', '33333333-3333-3333-3333-333333333333',
   '44444444-4444-4444-4444-444444444444', 'Fake Tenant Moved Out', '+919876500003',
-  'firebase-tenant-movedout', 'moved_out', 'approved', '2025-06-01', 1000000
+  'firebase-tenant-movedout', 'moved_out', 'approved', '2025-06-01', '2026-06-01', 1000000
 );
 
 insert into public.kyc_submissions (
