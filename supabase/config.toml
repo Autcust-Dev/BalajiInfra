@@ -344,10 +344,15 @@ email_optional = false
 [auth.web3.solana]
 enabled = false
 
-# Use Firebase Auth as a third-party provider alongside Supabase Auth.
+# Use Firebase Auth as a third-party provider alongside Supabase Auth (CLAUDE.md §4
+# rule 14). project_id here must match the fake app_config.firebase_project_id value
+# seed.sql sets locally (supabase/seed.sql) — is_tenant()'s own iss/aud check is a second,
+# independent layer on top of this Auth-level allow-list. The hosted project's equivalent
+# config is set in the Supabase dashboard (CLAUDE.md §8, "tasks only the human can do"),
+# not here — this file only affects the local CLI stack.
 [auth.third_party.firebase]
-enabled = false
-# project_id = "my-firebase-project"
+enabled = true
+project_id = "balajiinfra-local-dev"
 
 # Use Auth0 as a third-party provider alongside Supabase Auth.
 [auth.third_party.auth0]
@@ -386,6 +391,20 @@ policy = "per_worker"
 inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
+
+# check-phone: called pre-login, before any Firebase/Supabase session exists (CLAUDE.md §4
+# rule 31). verify_jwt's default (true) is satisfied by the anon apikey the client SDK
+# already attaches to every request, so no override is needed here.
+[functions.check-phone]
+enabled = true
+
+# link-firebase-uid: called right after Firebase sign-in, before tenants.firebase_uid is
+# set — so is_tenant() is still false and this can't ride a Supabase-recognized session.
+# verify_jwt is off; the function verifies the Firebase ID token itself (issuer/audience/
+# signature against Google's JWKS) before doing anything with service_role.
+[functions.link-firebase-uid]
+enabled = true
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
