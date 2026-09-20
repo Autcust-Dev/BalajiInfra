@@ -1,5 +1,5 @@
 begin;
-select plan(9);
+select plan(10);
 
 -- service_role's BYPASSRLS attribute skips row-level policies, but NOT the base table
 -- privilege system — every table needed a real GRANT added for it in this changeset (it
@@ -43,6 +43,12 @@ select lives_ok(
   $$ update public.tenants set firebase_uid = 'firebase-newly-linked'
      where id = '66666666-6666-6666-6666-666666666666' $$,
   'service_role can update tenants.firebase_uid, unrestricted by the tenant column guard'
+);
+
+-- check-phone: rate-limit ledger insert.
+select lives_ok(
+  $$ insert into public.phone_check_attempts (phone, ip) values ('+919876500099', '203.0.113.5') $$,
+  'service_role can insert into phone_check_attempts'
 );
 
 -- audit_log records these as a system actor, not admin/tenant (no JWT claims are set for

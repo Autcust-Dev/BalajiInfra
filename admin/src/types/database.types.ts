@@ -352,6 +352,27 @@ export type Database = {
           },
         ]
       }
+      phone_check_attempts: {
+        Row: {
+          created_at: string
+          id: string
+          ip: unknown
+          phone: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip: unknown
+          phone: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip?: unknown
+          phone?: string
+        }
+        Relationships: []
+      }
       properties: {
         Row: {
           address: string
