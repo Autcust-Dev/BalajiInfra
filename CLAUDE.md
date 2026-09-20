@@ -295,6 +295,14 @@ security review of every policy and function, store release checklists.
 - Before a phase: write a short plan (files to create/change, migrations, tests) and
   show it to the human. Then implement.
 - Small, focused commits with clear messages. One concern per commit.
+- **All changes go through a branch + pull request; `main` is never pushed to or merged
+  into directly.** The human merges PRs on GitHub — never via the IDE's "Commit & Sync"
+  (or any local push straight to `main`) and never via an in-editor merge into `main`.
+  This applies to the coding agent too: always work on a branch and open a PR, never
+  commit or push directly to `main`. Reason: `main` auto-deploys — every migration
+  merged to it is applied to the live hosted Supabase database, and `admin/` deploys to
+  production from it (§3) — so a direct/local merge into `main` ships to production
+  with no review step.
 - Write tests alongside code, not after.
 - When a requirement is unclear, ask. Do not guess on anything involving money,
   personal data, or security.
