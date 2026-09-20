@@ -128,6 +128,25 @@ enrollment instead.
 
 Not available yet — see "Status" above.
 
+## Deployment — admin panel
+
+`admin/` deploys to **Cloudflare Workers static assets** — not Cloudflare Pages. (Pages'
+SPA fallback works via a `_redirects` file; Workers static assets uses
+`assets.not_found_handling` in `admin/wrangler.jsonc` instead — mixing the two approaches
+causes a deploy-time "infinite loop" error, since Pages' `/* /index.html 200` rule doesn't
+mean the same thing to the Workers assets router.)
+
+- Config: `admin/wrangler.jsonc` — static assets only (`assets.directory: "./dist"`,
+  `assets.not_found_handling: "single-page-application"`), no Worker script.
+- Deployed from `main` only.
+- `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are set as Cloudflare environment
+  variables (Production), never committed — same rule as local `.env.local`. They're
+  baked in at build time (Vite convention), so they must be set before the build runs.
+- `wrangler` is a pinned (exact-version) `admin/` devDependency, not installed ad hoc, so
+  `npx wrangler deploy` always uses the same version.
+- Placed behind Cloudflare Access (separate from and in addition to the app's own
+  Supabase Auth + MFA).
+
 ## Contributing
 
 - Schema changes only via Supabase CLI migrations — never edit tables directly

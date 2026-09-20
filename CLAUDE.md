@@ -82,7 +82,10 @@ Core rules of the product:
 - UI: shadcn/ui + Tailwind. Tables: TanStack Table. Data: TanStack Query.
   Routing: React Router. Forms: react-hook-form + zod.
 - Client: `@supabase/supabase-js` with generated types.
-- Hosting: Cloudflare Pages, placed behind **Cloudflare Access**.
+- Hosting: **Cloudflare Workers static assets** (not Cloudflare Pages — Pages' `_redirects`
+  SPA-fallback approach isn't how this deploys; Workers uses `assets.not_found_handling =
+  "single-page-application"` in `admin/wrangler.jsonc` instead). Static assets only, no
+  Worker script, deployed from `main` only. Placed behind **Cloudflare Access**.
 - No server code in `admin/`. Anything privileged goes through an Edge Function.
 
 **Payments** — Razorpay, called only from Edge Functions.
@@ -306,5 +309,5 @@ security review of every policy and function, store release checklists.
 - Configure Supabase third-party auth (Firebase) in the dashboard if CLI can't.
 - Razorpay account, KYC with Razorpay, API keys, webhook secret.
 - Apple Developer + Google Play accounts.
-- Cloudflare Pages project and Cloudflare Access policy for the admin site.
+- Cloudflare Workers (static assets) project and Cloudflare Access policy for the admin site.
 - Legal review of privacy policy and consent text.

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Wrangler (Cloudflare Workers static assets deploy)
+.wrangler/
+
 # Env files
 .env
 .env.local
