@@ -1,0 +1,13 @@
+{
+  // Static assets only — no Worker script ("main" is optional and intentionally omitted
+  // for assets-only Workers, per current Cloudflare docs). admin/ is a plain Vite SPA;
+  // there's no server-side logic here to run in the Workers runtime, so
+  // @cloudflare/vite-plugin (useful for emulating Worker bindings during local dev) isn't
+  // needed either.
+  "name": "balajiinfra",
+  "compatibility_date": "2026-09-20",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+  },
+}
