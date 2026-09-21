@@ -138,6 +138,28 @@ of checking in a `.env` (`.github/workflows/supabase.yml`).
   **`app_config` is readable by `anon`** — never put a secret in it. API keys, webhook
   signing secrets, etc. go through `supabase secrets set`, never a table.
 
+### Debugging a failed real Firebase login locally (`link-firebase-uid` 401)
+
+`link-firebase-uid` gets the expected Firebase project id from the `app_config` table
+(via `_firebase_project_id()`, `supabase/functions/_shared/service_role_client.ts`) at
+request time — **not** from any `.env` file. If it rejects a real Firebase ID token with
+`{"error": "invalid firebase id token"}`, the most common cause is that `app_config` is
+still on the fake `balajiinfra-local-dev` value (see "Configuring the Firebase project
+id" above) — the token's real `aud`/`iss` won't match what the function expects.
+
+To see exactly why verification failed (never logs the token, uid, or phone number):
+
+```
+cp supabase/functions/.env.example supabase/functions/.env   # LOCAL_DEBUG_FIREBASE_AUTH=true
+npm run supabase:start                                       # restart to load the new .env
+```
+
+Retry the login. On failure, the function logs the expected project id, the token's own
+(unverified) `iss`/`aud`, and the underlying `jose` error — including whether it's a
+claim mismatch (wrong project id) vs. something that doesn't extend `JOSEError` (almost
+always a JWKS fetch/network failure reaching `www.googleapis.com` from inside the
+edge-runtime container, worth checking if Docker Desktop's network has internet egress).
+
 ## Admin operations
 
 ### An admin lost their MFA device — removing their factor so they can re-enroll
