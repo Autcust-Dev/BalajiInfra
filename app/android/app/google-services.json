@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "137912693049",
+    "project_id": "balajiinfraandhostel",
+    "storage_bucket": "balajiinfraandhostel.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:137912693049:android:3b74a12484bc77c62238e8",
+        "android_client_info": {
+          "package_name": "com.balajiinfra.hostels"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDprTD4BupZSPoppWRJ_ejcvyXVNVpOlhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
