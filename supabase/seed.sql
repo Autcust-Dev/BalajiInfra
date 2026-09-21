@@ -4,7 +4,16 @@
 
 -- Local-only override of the app_config-driven Firebase project id (see the comment on
 -- this row in the app_config migration). This value never reaches the hosted database —
--- seed.sql only runs locally. Tests mock tenant JWTs with matching aud/iss claims.
+-- seed.sql only runs locally. Tests mock tenant JWTs with matching aud/iss claims
+-- (supabase/tests/*.sql) against this exact literal — do not change it here, and do not
+-- read it from an env var: plain SQL files can't see OS environment variables, and every
+-- pgTAP test's "should succeed" case depends on this staying "balajiinfra-local-dev".
+--
+-- To test a real Firebase OTP login locally instead: set SUPABASE_AUTH_FIREBASE_PROJECT_ID
+-- in supabase/.env (see supabase/.env.example) to your real Firebase project id, restart
+-- `supabase start`, then run this once to bring app_config back in sync (pgTAP tests will
+-- fail until you revert both, since their mocked JWTs still say "balajiinfra-local-dev"):
+--   npx supabase db query --local "update public.app_config set value = to_jsonb('<your-real-firebase-project-id>'::text) where key = 'firebase_project_id';"
 update public.app_config
 set value = '"balajiinfra-local-dev"'::jsonb
 where key = 'firebase_project_id';
@@ -88,6 +97,20 @@ insert into public.kyc_submissions (
   'submitted', '1234',
   '77777777-7777-7777-7777-777777777777/c7777777-7777-7777-7777-777777777777/aadhaar.jpg',
   '77777777-7777-7777-7777-777777777777/c7777777-7777-7777-7777-777777777777/selfie.jpg'
+);
+
+-- Tenant D: active, KYC not started, no firebase_uid yet — for manually testing a real
+-- Firebase phone-auth login end to end (device/emulator + a Firebase "test phone number"
+-- matching this row, see supabase/.env.example). firebase_uid is intentionally NULL: it
+-- gets set by the link-firebase-uid Edge Function on this tenant's first real login, the
+-- same as it would for a real tenant.
+insert into public.tenants (
+  id, property_id, room_id, full_name, phone, status, kyc_status,
+  move_in_date, monthly_rent_paise
+) values (
+  'f2222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333',
+  '44444444-4444-4444-4444-444444444444', 'Fake Tenant Login Test', '+919398252518',
+  'active', 'not_started', '2026-09-01', 1000000
 );
 
 insert into public.dues (id, tenant_id, type, description, amount_paise, due_date, status, created_by)

@@ -345,14 +345,24 @@ email_optional = false
 enabled = false
 
 # Use Firebase Auth as a third-party provider alongside Supabase Auth (CLAUDE.md §4
-# rule 14). project_id here must match the fake app_config.firebase_project_id value
-# seed.sql sets locally (supabase/seed.sql) — is_tenant()'s own iss/aud check is a second,
-# independent layer on top of this Auth-level allow-list. The hosted project's equivalent
-# config is set in the Supabase dashboard (CLAUDE.md §8, "tasks only the human can do"),
-# not here — this file only affects the local CLI stack.
+# rule 14). Read from SUPABASE_AUTH_FIREBASE_PROJECT_ID so a developer can point local
+# Supabase at a real Firebase project (see supabase/.env.example) to test real OTP logins,
+# without editing this file. This has no built-in fallback if the variable is missing —
+# `supabase start` will error until it's set, either via supabase/.env (copy from
+# supabase/.env.example, same as app/.env and admin/.env.local already work) or an
+# exported shell/CI variable (.github/workflows/supabase.yml sets it for CI). The
+# supabase/.env.example default value is "balajiinfra-local-dev", matching what
+# seed.sql hardcodes into app_config.firebase_project_id and what every pgTAP test's
+# mocked JWT `aud`/`iss` claims use (supabase/tests/*.sql) — copy the example file
+# as-is and pgTAP keeps passing unmodified. is_tenant()'s own iss/aud check (against
+# app_config, not this file) is a second, independent layer on top of this Auth-level
+# allow-list — see the comment on the app_config row this must match (supabase/migrations,
+# app_config section) for how to sync it locally when overriding this value. The hosted
+# project's equivalent config is set in the Supabase dashboard (CLAUDE.md §8, "tasks only
+# the human can do"), not here — this file only affects the local CLI stack.
 [auth.third_party.firebase]
 enabled = true
-project_id = "balajiinfra-local-dev"
+project_id = "env(SUPABASE_AUTH_FIREBASE_PROJECT_ID)"
 
 # Use Auth0 as a third-party provider alongside Supabase Auth.
 [auth.third_party.auth0]
