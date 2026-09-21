@@ -286,7 +286,10 @@ Admin: create dues, record manual payments, payment history. Edge Functions:
 
 **Phase 6 — Hardening and release**
 Error states, offline handling, empty states, Sentry/Crashlytics, rate limits review,
-security review of every policy and function, store release checklists.
+security review of every policy and function, store release checklists. **Enforce Firebase
+App Check** before release: switch from debug providers to Play Integrity (Android) /
+App Attest (iOS) and turn on enforcement for the OTP endpoint (per §3, App Check protects
+`check-phone` from SMS abuse — debug-provider tokens must not be accepted in production).
 
 ---
 
