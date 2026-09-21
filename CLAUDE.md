@@ -290,6 +290,12 @@ security review of every policy and function, store release checklists. **Enforc
 App Check** before release: switch from debug providers to Play Integrity (Android) /
 App Attest (iOS) and turn on enforcement for the OTP endpoint (per §3, App Check protects
 `check-phone` from SMS abuse — debug-provider tokens must not be accepted in production).
+Register the **release SHA-1/SHA-256** (and, once Play App Signing re-signs the app, the
+**Play App Signing certificate's** SHA-1/SHA-256 pulled from Play Console → Setup → App
+Integrity) in the Firebase Android app's settings, alongside the debug fingerprint added in
+Phase 3. Restrict the Android `google-services.json` API key in Google Cloud Console →
+Credentials to this package name (`com.balajiinfra.hostels`) + the registered SHA-1
+fingerprints, once all the release ones are known.
 
 ---
 
