@@ -58,10 +58,16 @@ invoked via `npx`:
 
 ```
 npm install                 # installs the Supabase CLI (root package.json)
-npx supabase start          # requires Docker Desktop running
+cp .env.example .env        # repo root — see "Configuring the Firebase project id" below
+npm run supabase:start      # requires Docker Desktop running
 npx supabase status
 npx supabase stop
 ```
+
+Use `npm run supabase:start` / `npm run db:reset` rather than `npx supabase start` /
+`npx supabase db reset` directly — both re-seed the database and then run
+`scripts/sync-local-firebase-project-id.js` to bring `app_config.firebase_project_id`
+back in sync with `.env` (see below); the bare `npx` commands skip that step.
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
 locally. If `docker`/`npx supabase start` can't find Docker even though Docker
@@ -95,15 +101,25 @@ error on a URL containing that literal string). Always copy `.env.example` befor
 any `npx supabase` command. CI sets the same fake default as a workflow env var instead
 of checking in a `.env` (`.github/workflows/supabase.yml`).
 
-- **Local / tests**: `supabase/seed.sql` sets `app_config.firebase_project_id` to the
-  fake value `balajiinfra-local-dev` (applied automatically by `supabase start`/`db
-  reset`) — matching the default in `.env.example`. pgTAP tests mock tenant JWTs with
-  matching `aud`/`iss` claims, so don't change this default without also updating every
-  test in `supabase/tests/`. To test a **real** Firebase OTP login against local
-  Supabase, set `SUPABASE_AUTH_FIREBASE_PROJECT_ID` in `.env` to your real Firebase
-  project id, restart `supabase start`, then sync `app_config` to match (command
-  documented above the `app_config` update in `supabase/seed.sql`) — pgTAP tests will
-  fail until you revert both.
+- **Local / tests**: `supabase/seed.sql` always sets `app_config.firebase_project_id` to
+  the fake value `balajiinfra-local-dev` (plain SQL can't read `.env` — see the comment
+  above the `app_config` update in `supabase/seed.sql`), which is also what every pgTAP
+  test's mocked JWT `aud`/`iss` claims use — don't change that literal, or every test in
+  `supabase/tests/` needs updating too. `npm run supabase:start` / `npm run db:reset` run
+  `scripts/sync-local-firebase-project-id.js` right after seeding, which reads
+  `SUPABASE_AUTH_FIREBASE_PROJECT_ID` (from `.env`, or the shell env — CI sets it as a
+  workflow env var) and pushes it into `app_config` as a separate step, outside SQL:
+  - **Left as the default** (`balajiinfra-local-dev`, matching `.env.example`): the sync
+    is a no-op, `app_config` already has that value, pgTAP tests pass as-is. This is what
+    CI does.
+  - **Set to your real Firebase project id** (e.g. `balajiinfraandhostel`) in `.env`: the
+    sync pushes that value into `app_config`, so a real Firebase OTP login now passes the
+    `is_tenant()` `iss`/`aud` check locally too. **pgTAP tests will fail while `.env` is
+    set this way** (their mocked JWTs still say `balajiinfra-local-dev`) — switch `.env`
+    back to the default and re-run `npm run db:reset` before running `npx supabase test
+    db`.
+  - Run the sync manually any time without re-seeding:
+    `npm run db:sync-firebase-project`.
 - **Hosted**: started as JSON `null` (fail-closed — Firebase tenant login simply
   doesn't work until this is set, rather than trusting an unconfigured issuer). Set
   **once** the Firebase project existed (a human task, see `CLAUDE.md` §8), directly

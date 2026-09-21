@@ -39,6 +39,9 @@ jobs:
       - name: Start local Supabase stack (applies migrations + seed)
         run: npx supabase start
 
+      - name: Sync app_config.firebase_project_id (no-op with the CI default)
+        run: node scripts/sync-local-firebase-project-id.js
+
       - name: Run pgTAP tests
         run: npx supabase test db
 

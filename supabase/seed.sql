@@ -11,10 +11,13 @@
 --
 -- To test a real Firebase OTP login locally instead: set SUPABASE_AUTH_FIREBASE_PROJECT_ID
 -- in .env AT THE REPO ROOT (see .env.example there — config.toml's env() reads from the
--- project root, not supabase/) to your real Firebase project id, restart `supabase start`,
--- then run this once to bring app_config back in sync (pgTAP tests will
--- fail until you revert both, since their mocked JWTs still say "balajiinfra-local-dev"):
---   npx supabase db query --local "update public.app_config set value = to_jsonb('<your-real-firebase-project-id>'::text) where key = 'firebase_project_id';"
+-- project root, not supabase/) to your real Firebase project id, then use
+-- `npm run supabase:start` / `npm run db:reset` (not the bare `npx supabase` equivalents)
+-- — both run scripts/sync-local-firebase-project-id.js right after this file seeds, which
+-- brings app_config back in sync with .env from outside SQL (see README.md, "Configuring
+-- the Firebase project id"). pgTAP tests will fail while .env is set this way, since their
+-- mocked JWTs still say "balajiinfra-local-dev" — switch .env back and re-run
+-- `npm run db:reset` before `npx supabase test db`.
 update public.app_config
 set value = '"balajiinfra-local-dev"'::jsonb
 where key = 'firebase_project_id';
