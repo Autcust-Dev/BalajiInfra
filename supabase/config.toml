@@ -346,12 +346,16 @@ enabled = false
 
 # Use Firebase Auth as a third-party provider alongside Supabase Auth (CLAUDE.md §4
 # rule 14). Read from SUPABASE_AUTH_FIREBASE_PROJECT_ID so a developer can point local
-# Supabase at a real Firebase project (see supabase/.env.example) to test real OTP logins,
-# without editing this file. This has no built-in fallback if the variable is missing —
-# `supabase start` will error until it's set, either via supabase/.env (copy from
-# supabase/.env.example, same as app/.env and admin/.env.local already work) or an
-# exported shell/CI variable (.github/workflows/supabase.yml sets it for CI). The
-# supabase/.env.example default value is "balajiinfra-local-dev", matching what
+# Supabase at a real Firebase project (see .env.example AT THE REPO ROOT) to test real
+# OTP logins, without editing this file. Per Supabase's docs, env() substitution here
+# reads from a .env file at the *project root* (alongside supabase/), not supabase/.env —
+# copy the root .env.example before running any `npx supabase` command. Confirmed on this
+# project: if the variable is missing, the CLI does NOT error — it silently substitutes
+# the literal text "env(SUPABASE_AUTH_FIREBASE_PROJECT_ID)", which then fails later in a
+# confusing way (e.g. a URL containing that literal string). There's no built-in default.
+# CI sets the same fake default directly as a workflow env var
+# (.github/workflows/supabase.yml), since a checked-in .env would defeat gitignoring it.
+# The root .env.example default value is "balajiinfra-local-dev", matching what
 # seed.sql hardcodes into app_config.firebase_project_id and what every pgTAP test's
 # mocked JWT `aud`/`iss` claims use (supabase/tests/*.sql) — copy the example file
 # as-is and pgTAP keeps passing unmodified. is_tenant()'s own iss/aud check (against

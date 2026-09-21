@@ -77,11 +77,33 @@ Local URLs after `npx supabase start`: Studio at `http://127.0.0.1:54323`, API a
 
 Tenant RLS policies (`is_tenant()`) check the JWT's `iss`/`aud` claims against the
 Firebase project id — this is **not hardcoded** in any function. It's a single row,
-`app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`.
+`app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`. A second,
+separate copy of the same id configures Supabase Auth's own third-party Firebase
+provider (`supabase/config.toml`, `[auth.third_party.firebase].project_id`) — this one
+is required just to run `npx supabase start` at all:
 
-- **Local / tests**: `supabase/seed.sql` sets it to the fake value
-  `balajiinfra-local-dev` (applied automatically by `supabase start`/`db reset`).
-  pgTAP tests mock tenant JWTs with matching `aud`/`iss` claims.
+```
+cp .env.example .env   # repo root, NOT supabase/.env — see comments in .env.example
+```
+
+Supabase CLI's `env(...)` substitution in `config.toml` reads from a `.env` file at the
+**project root** (docs: Local Development → Managing config), not from inside
+`supabase/`. If this file is missing, `npx supabase start` does **not** fail with a clear
+config error — it silently substitutes the literal text `env(SUPABASE_AUTH_FIREBASE_PROJECT_ID)`
+into the config, which then fails later in a confusing way (e.g. a "Failed to fetch"
+error on a URL containing that literal string). Always copy `.env.example` before running
+any `npx supabase` command. CI sets the same fake default as a workflow env var instead
+of checking in a `.env` (`.github/workflows/supabase.yml`).
+
+- **Local / tests**: `supabase/seed.sql` sets `app_config.firebase_project_id` to the
+  fake value `balajiinfra-local-dev` (applied automatically by `supabase start`/`db
+  reset`) — matching the default in `.env.example`. pgTAP tests mock tenant JWTs with
+  matching `aud`/`iss` claims, so don't change this default without also updating every
+  test in `supabase/tests/`. To test a **real** Firebase OTP login against local
+  Supabase, set `SUPABASE_AUTH_FIREBASE_PROJECT_ID` in `.env` to your real Firebase
+  project id, restart `supabase start`, then sync `app_config` to match (command
+  documented above the `app_config` update in `supabase/seed.sql`) — pgTAP tests will
+  fail until you revert both.
 - **Hosted**: started as JSON `null` (fail-closed — Firebase tenant login simply
   doesn't work until this is set, rather than trusting an unconfigured issuer). Set
   **once** the Firebase project existed (a human task, see `CLAUDE.md` §8), directly

@@ -10,8 +10,9 @@
 -- pgTAP test's "should succeed" case depends on this staying "balajiinfra-local-dev".
 --
 -- To test a real Firebase OTP login locally instead: set SUPABASE_AUTH_FIREBASE_PROJECT_ID
--- in supabase/.env (see supabase/.env.example) to your real Firebase project id, restart
--- `supabase start`, then run this once to bring app_config back in sync (pgTAP tests will
+-- in .env AT THE REPO ROOT (see .env.example there — config.toml's env() reads from the
+-- project root, not supabase/) to your real Firebase project id, restart `supabase start`,
+-- then run this once to bring app_config back in sync (pgTAP tests will
 -- fail until you revert both, since their mocked JWTs still say "balajiinfra-local-dev"):
 --   npx supabase db query --local "update public.app_config set value = to_jsonb('<your-real-firebase-project-id>'::text) where key = 'firebase_project_id';"
 update public.app_config
@@ -101,7 +102,8 @@ insert into public.kyc_submissions (
 
 -- Tenant D: active, KYC not started, no firebase_uid yet — for manually testing a real
 -- Firebase phone-auth login end to end (device/emulator + a Firebase "test phone number"
--- matching this row, see supabase/.env.example). firebase_uid is intentionally NULL: it
+-- matching this row, see .env.example at the repo root). firebase_uid is intentionally
+-- NULL: it
 -- gets set by the link-firebase-uid Edge Function on this tenant's first real login, the
 -- same as it would for a real tenant.
 insert into public.tenants (
