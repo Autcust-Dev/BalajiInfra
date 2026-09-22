@@ -20,6 +20,10 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      # Matches seed.sql's app_config.firebase_project_id and every pgTAP test's mocked
+      # JWT aud/iss (supabase/tests/*.sql). See supabase/.env.example for what this is.
+      SUPABASE_AUTH_FIREBASE_PROJECT_ID: balajiinfra-local-dev
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -34,6 +38,9 @@ jobs:
 
       - name: Start local Supabase stack (applies migrations + seed)
         run: npx supabase start
+
+      - name: Sync app_config.firebase_project_id (no-op with the CI default)
+        run: node scripts/sync-local-firebase-project-id.js
 
       - name: Run pgTAP tests
         run: npx supabase test db

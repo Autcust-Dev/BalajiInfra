@@ -10,12 +10,12 @@ Supabase + Firebase backend. Full product and architecture rules live in
 /
 ├── package.json  Root tooling only — holds the Supabase CLI devDependency
 ├── admin/        React + TypeScript admin panel (Vite, static SPA)
-├── app/          Flutter mobile app                                        [pending — see below]
+├── app/          Flutter mobile app
 └── supabase/     Supabase CLI project (migrations, functions, pgTAP tests)
 ```
 
-`app/` is not scaffolded yet — it requires the Flutter SDK, which isn't part of
-this repo. See "Status" below.
+`app/` requires the Flutter SDK, which isn't part of this repo. See "Status" below and
+"Local setup — app".
 
 ## Status
 
@@ -28,8 +28,10 @@ this repo. See "Status" below.
   connected via the Supabase GitHub integration — merges to `main` auto-deploy
   migrations to production, so treat any PR touching `supabase/migrations/` as a
   production change.
-- ⏳ **app/** — pending, paused. Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install)
-  installed locally, then `flutter create app` (existing Flutter code will be moved in).
+- 🚧 **app/** — Phase 3 (login) in progress: OTP flow, Supabase third-party auth wiring,
+  firebase_uid linking, session persistence, go_router guard chain with a bounded-timeout
+  startup sequence (splash screen / friendly error + Retry — never a black screen). Manual
+  testing has only been done against local Docker so far; see "Local setup — app".
 
 ## Local setup — admin panel
 
@@ -58,10 +60,16 @@ invoked via `npx`:
 
 ```
 npm install                 # installs the Supabase CLI (root package.json)
-npx supabase start          # requires Docker Desktop running
+cp .env.example .env        # repo root — see "Configuring the Firebase project id" below
+npm run supabase:start      # requires Docker Desktop running
 npx supabase status
 npx supabase stop
 ```
+
+Use `npm run supabase:start` / `npm run db:reset` rather than `npx supabase start` /
+`npx supabase db reset` directly — both re-seed the database and then run
+`scripts/sync-local-firebase-project-id.js` to bring `app_config.firebase_project_id`
+back in sync with `.env` (see below); the bare `npx` commands skip that step.
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
 locally. If `docker`/`npx supabase start` can't find Docker even though Docker
@@ -77,11 +85,43 @@ Local URLs after `npx supabase start`: Studio at `http://127.0.0.1:54323`, API a
 
 Tenant RLS policies (`is_tenant()`) check the JWT's `iss`/`aud` claims against the
 Firebase project id — this is **not hardcoded** in any function. It's a single row,
-`app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`.
+`app_config.key = 'firebase_project_id'`, read by `_firebase_project_id()`. A second,
+separate copy of the same id configures Supabase Auth's own third-party Firebase
+provider (`supabase/config.toml`, `[auth.third_party.firebase].project_id`) — this one
+is required just to run `npx supabase start` at all:
 
-- **Local / tests**: `supabase/seed.sql` sets it to the fake value
-  `balajiinfra-local-dev` (applied automatically by `supabase start`/`db reset`).
-  pgTAP tests mock tenant JWTs with matching `aud`/`iss` claims.
+```
+cp .env.example .env   # repo root, NOT supabase/.env — see comments in .env.example
+```
+
+Supabase CLI's `env(...)` substitution in `config.toml` reads from a `.env` file at the
+**project root** (docs: Local Development → Managing config), not from inside
+`supabase/`. If this file is missing, `npx supabase start` does **not** fail with a clear
+config error — it silently substitutes the literal text `env(SUPABASE_AUTH_FIREBASE_PROJECT_ID)`
+into the config, which then fails later in a confusing way (e.g. a "Failed to fetch"
+error on a URL containing that literal string). Always copy `.env.example` before running
+any `npx supabase` command. CI sets the same fake default as a workflow env var instead
+of checking in a `.env` (`.github/workflows/supabase.yml`).
+
+- **Local / tests**: `supabase/seed.sql` always sets `app_config.firebase_project_id` to
+  the fake value `balajiinfra-local-dev` (plain SQL can't read `.env` — see the comment
+  above the `app_config` update in `supabase/seed.sql`), which is also what every pgTAP
+  test's mocked JWT `aud`/`iss` claims use — don't change that literal, or every test in
+  `supabase/tests/` needs updating too. `npm run supabase:start` / `npm run db:reset` run
+  `scripts/sync-local-firebase-project-id.js` right after seeding, which reads
+  `SUPABASE_AUTH_FIREBASE_PROJECT_ID` (from `.env`, or the shell env — CI sets it as a
+  workflow env var) and pushes it into `app_config` as a separate step, outside SQL:
+  - **Left as the default** (`balajiinfra-local-dev`, matching `.env.example`): the sync
+    is a no-op, `app_config` already has that value, pgTAP tests pass as-is. This is what
+    CI does.
+  - **Set to your real Firebase project id** (e.g. `balajiinfraandhostel`) in `.env`: the
+    sync pushes that value into `app_config`, so a real Firebase OTP login now passes the
+    `is_tenant()` `iss`/`aud` check locally too. **pgTAP tests will fail while `.env` is
+    set this way** (their mocked JWTs still say `balajiinfra-local-dev`) — switch `.env`
+    back to the default and re-run `npm run db:reset` before running `npx supabase test
+    db`.
+  - Run the sync manually any time without re-seeding:
+    `npm run db:sync-firebase-project`.
 - **Hosted**: started as JSON `null` (fail-closed — Firebase tenant login simply
   doesn't work until this is set, rather than trusting an unconfigured issuer). Set
   **once** the Firebase project existed (a human task, see `CLAUDE.md` §8), directly
@@ -99,6 +139,28 @@ Firebase project id — this is **not hardcoded** in any function. It's a single
 
   **`app_config` is readable by `anon`** — never put a secret in it. API keys, webhook
   signing secrets, etc. go through `supabase secrets set`, never a table.
+
+### Debugging a failed real Firebase login locally (`link-firebase-uid` 401)
+
+`link-firebase-uid` gets the expected Firebase project id from the `app_config` table
+(via `_firebase_project_id()`, `supabase/functions/_shared/service_role_client.ts`) at
+request time — **not** from any `.env` file. If it rejects a real Firebase ID token with
+`{"error": "invalid firebase id token"}`, the most common cause is that `app_config` is
+still on the fake `balajiinfra-local-dev` value (see "Configuring the Firebase project
+id" above) — the token's real `aud`/`iss` won't match what the function expects.
+
+To see exactly why verification failed (never logs the token, uid, or phone number):
+
+```
+cp supabase/functions/.env.example supabase/functions/.env   # LOCAL_DEBUG_FIREBASE_AUTH=true
+npm run supabase:start                                       # restart to load the new .env
+```
+
+Retry the login. On failure, the function logs the expected project id, the token's own
+(unverified) `iss`/`aud`, and the underlying `jose` error — including whether it's a
+claim mismatch (wrong project id) vs. something that doesn't extend `JOSEError` (almost
+always a JWKS fetch/network failure reaching `www.googleapis.com` from inside the
+edge-runtime container, worth checking if Docker Desktop's network has internet egress).
 
 ## Admin operations
 
@@ -124,9 +186,37 @@ enrollment instead.
   Their next login attempt will find no enrolled factor and land on the enrollment
   screen automatically — no other cleanup needed.
 
-## Local setup — app (pending)
+## Local setup — app
 
-Not available yet — see "Status" above.
+Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install).
+
+```sh
+cd app
+flutter pub get
+cp .env.example .env.local   # local Docker Supabase (`supabase start`)
+cp .env.example .env.prod    # hosted (balajiinfraandhostel) Supabase project — fill in
+                              # SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY from
+                              # Dashboard → Settings → API; never commit this file
+```
+
+Both `.env.local` and `.env.prod` are gitignored — see `.env.example` for what each
+variable means and how `SUPABASE_URL` differs by device (simulator vs. emulator vs. real
+phone) for the local case.
+
+Run against whichever backend you mean, **explicitly** — there is no default:
+
+```sh
+flutter run --dart-define-from-file=.env.local   # local Docker Supabase
+flutter run --dart-define-from-file=.env.prod    # hosted
+```
+
+A debug build shows a small **LOCAL** (blue) or **PROD** (red) tag in the top-left corner
+at all times (`core/environment_label.dart`) — check it before testing anything, especially
+before running against `.env.prod`, since that talks to the real hosted project. The tag
+never appears in release builds.
+
+`flutter analyze` (zero issues) and `flutter test` don't need either `.env` file — CI
+(`.github/workflows/app.yml`) runs both without one.
 
 ## Deployment — admin panel
 

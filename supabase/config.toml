@@ -344,10 +344,29 @@ email_optional = false
 [auth.web3.solana]
 enabled = false
 
-# Use Firebase Auth as a third-party provider alongside Supabase Auth.
+# Use Firebase Auth as a third-party provider alongside Supabase Auth (CLAUDE.md §4
+# rule 14). Read from SUPABASE_AUTH_FIREBASE_PROJECT_ID so a developer can point local
+# Supabase at a real Firebase project (see .env.example AT THE REPO ROOT) to test real
+# OTP logins, without editing this file. Per Supabase's docs, env() substitution here
+# reads from a .env file at the *project root* (alongside supabase/), not supabase/.env —
+# copy the root .env.example before running any `npx supabase` command. Confirmed on this
+# project: if the variable is missing, the CLI does NOT error — it silently substitutes
+# the literal text "env(SUPABASE_AUTH_FIREBASE_PROJECT_ID)", which then fails later in a
+# confusing way (e.g. a URL containing that literal string). There's no built-in default.
+# CI sets the same fake default directly as a workflow env var
+# (.github/workflows/supabase.yml), since a checked-in .env would defeat gitignoring it.
+# The root .env.example default value is "balajiinfra-local-dev", matching what
+# seed.sql hardcodes into app_config.firebase_project_id and what every pgTAP test's
+# mocked JWT `aud`/`iss` claims use (supabase/tests/*.sql) — copy the example file
+# as-is and pgTAP keeps passing unmodified. is_tenant()'s own iss/aud check (against
+# app_config, not this file) is a second, independent layer on top of this Auth-level
+# allow-list — see the comment on the app_config row this must match (supabase/migrations,
+# app_config section) for how to sync it locally when overriding this value. The hosted
+# project's equivalent config is set in the Supabase dashboard (CLAUDE.md §8, "tasks only
+# the human can do"), not here — this file only affects the local CLI stack.
 [auth.third_party.firebase]
-enabled = false
-# project_id = "my-firebase-project"
+enabled = true
+project_id = "env(SUPABASE_AUTH_FIREBASE_PROJECT_ID)"
 
 # Use Auth0 as a third-party provider alongside Supabase Auth.
 [auth.third_party.auth0]
@@ -386,6 +405,20 @@ policy = "per_worker"
 inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
+
+# check-phone: called pre-login, before any Firebase/Supabase session exists (CLAUDE.md §4
+# rule 31). verify_jwt's default (true) is satisfied by the anon apikey the client SDK
+# already attaches to every request, so no override is needed here.
+[functions.check-phone]
+enabled = true
+
+# link-firebase-uid: called right after Firebase sign-in, before tenants.firebase_uid is
+# set — so is_tenant() is still false and this can't ride a Supabase-recognized session.
+# verify_jwt is off; the function verifies the Firebase ID token itself (issuer/audience/
+# signature against Google's JWKS) before doing anything with service_role.
+[functions.link-firebase-uid]
+enabled = true
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"

@@ -4,7 +4,10 @@
   "private": true,
   "description": "Hostel / PG management monorepo — tooling root. Supabase CLI is a dev dependency here; run it via `npx supabase`.",
   "scripts": {
-    "supabase": "supabase"
+    "supabase": "supabase",
+    "supabase:start": "supabase start && npm run db:sync-firebase-project",
+    "db:reset": "supabase db reset && npm run db:sync-firebase-project",
+    "db:sync-firebase-project": "node scripts/sync-local-firebase-project-id.js"
   },
   "devDependencies": {
     "supabase": "^2.117.0"

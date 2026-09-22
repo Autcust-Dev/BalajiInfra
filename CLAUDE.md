@@ -38,6 +38,10 @@ Core rules of the product:
 ├── package.json  Root tooling only — holds the Supabase CLI devDependency
 ├── app/          Flutter mobile app
 ├── admin/        React + TypeScript admin panel (Vite, static site)
+├── firebase/     Firebase Cloud Functions (2nd gen) — currently just the beforeSignIn
+│                 blocking function that sets the `role: "authenticated"` custom claim
+│                 (CLAUDE.md §4 rule 14). Deploy via `npx firebase-tools`, not this repo's
+│                 root Supabase CLI devDependency.
 ├── supabase/     Supabase CLI project (run via `npx supabase` from repo root)
 │   ├── migrations/   SQL migrations (ONLY way to change the schema)
 │   ├── functions/    Edge Functions (TypeScript / Deno)
@@ -64,10 +68,22 @@ Core rules of the product:
 - **Supabase CLI is a root `devDependency`** (`npm install supabase --save-dev` at the
   repo root), invoked as `npx supabase <command>` from the repo root — not a global
   install. Requires Docker Desktop running locally for `supabase start`.
+- **Manual/dev testing targets the hosted project directly**, not `supabase start` — local
+  Docker is too slow on Windows for iterative testing. This is only safe pre-launch, while
+  the hosted project has no real tenant or KYC data. CI is unaffected: it still runs
+  `supabase start` + pgTAP against local Docker on GitHub Actions
+  (`.github/workflows/supabase.yml`), so nothing merges without passing there regardless of
+  how it was tested locally. **Before any real tenant or KYC data goes into the hosted
+  project, stand up a separate staging Supabase project** for manual/dev testing instead
+  (Phase 6) — don't keep testing against hosted once it holds real data.
 
 **Firebase**
 - Firebase Phone Auth — **tenants only**. Connected to Supabase via Supabase
   "Third-party auth" (Firebase provider).
+- Firebase Cloud Functions (2nd gen), region `asia-south1`, in `firebase/functions/` —
+  currently just the `beforeSignIn` blocking function (rule 14). Requires the project to be
+  upgraded to **Identity Platform** plus **Blaze billing** (already required for FCM/App
+  Check) before it can be deployed.
 - Firebase Cloud Messaging (FCM) — push notifications.
 - Crashlytics — app crash reporting.
 - App Check enabled (protects the OTP endpoint from SMS abuse).
@@ -164,11 +180,15 @@ Never invent method names, config keys, or claims.
     hosted). `app_config` is readable by `anon` — **never store secrets there**; secrets
     (API keys, webhook signing secrets, etc.) go through `supabase secrets set` (rule 12),
     never a table.
-14. Supabase third-party auth with Firebase may require a `role: authenticated`
-    custom claim on Firebase tokens (set via Firebase blocking function or Admin SDK).
-    **Verify current Supabase docs and implement exactly what they require.**
-    If this proves unworkable, stop and propose the fallback (an Edge Function that
-    verifies the Firebase ID token and issues a Supabase-compatible JWT) to the human.
+14. Supabase third-party auth with Firebase **requires** a `role: authenticated` custom
+    claim on Firebase tokens — confirmed against current Supabase docs (not just "may").
+    Set via a Firebase Auth blocking function (2nd gen, `beforeSignIn`), scaffolded at
+    `firebase/functions/src/index.ts` — sets `role: "authenticated"` and nothing else (no
+    other claims, no secrets, no network calls). Not yet deployed: it needs Identity
+    Platform + Blaze on the Firebase project first (`firebase/README.md`, and §8's "tasks
+    only the human can do"). `supabase/tests/013_anon_role_blocked_without_authenticated_claim.sql`
+    proves what happens without the claim — the session stays Postgres role `anon`, and
+    every tenant-facing table's GRANT (rule 9) blocks it outright, independent of RLS.
 15. Admins: Supabase Auth user + row in `admins` table + MFA (`aal2`) required by
     `is_admin()`. Admin creation is manual/seeded, never self-signup
     (disable public signups).
@@ -248,6 +268,8 @@ Create in migration order; adjust names only with good reason and update this fi
 - `supabase`: start local stack, apply migrations, run pgTAP tests.
 - `admin`: install, `tsc --noEmit`, lint, build, unit tests.
 - `app`: `flutter analyze` (zero issues), `flutter test`.
+- `firebase-functions`: install, `tsc --noEmit`, unit tests (`firebase/functions/`). Build
+  only — CI never deploys it (rule 14's blocking function is deployed manually, once).
 - Fail the build if generated types are out of date with migrations.
 
 ---
@@ -274,6 +296,9 @@ Admin login with MFA, protected layout, property/room management, tenant list
 **Phase 3 — App: login**
 `check-phone` function, Firebase OTP flow, Supabase third-party auth wiring,
 firebase_uid linking on first login, session persistence, logout, min-version check.
+`beforeSignIn` blocking function (rule 14) scaffolded in `firebase/functions/` — deploy is
+a human-only step gated on Identity Platform + Blaze (§8), so login only fully works
+end-to-end on hosted once that's done.
 
 **Phase 4 — KYC end to end**
 App: consent screen → masked Aadhaar upload → in-app selfie → submit → pending screen
@@ -286,7 +311,20 @@ Admin: create dues, record manual payments, payment history. Edge Functions:
 
 **Phase 6 — Hardening and release**
 Error states, offline handling, empty states, Sentry/Crashlytics, rate limits review,
-security review of every policy and function, store release checklists.
+security review of every policy and function, store release checklists. **Stand up a
+separate staging Supabase project before any real tenant or KYC data goes into the hosted
+(production) project** — manual/dev testing has been happening directly against hosted
+pre-launch (§3) since local Docker is too slow on Windows; that stops being safe once real
+data exists, so move dev/manual testing to staging at that point instead. **Enforce Firebase
+App Check** before release: switch from debug providers to Play Integrity (Android) /
+App Attest (iOS) and turn on enforcement for the OTP endpoint (per §3, App Check protects
+`check-phone` from SMS abuse — debug-provider tokens must not be accepted in production).
+Register the **release SHA-1/SHA-256** (and, once Play App Signing re-signs the app, the
+**Play App Signing certificate's** SHA-1/SHA-256 pulled from Play Console → Setup → App
+Integrity) in the Firebase Android app's settings, alongside the debug fingerprint added in
+Phase 3. Restrict the Android `google-services.json` API key in Google Cloud Console →
+Credentials to this package name (`com.balajiinfra.hostels`) + the registered SHA-1
+fingerprints, once all the release ones are known.
 
 ---
 
@@ -314,6 +352,12 @@ security review of every policy and function, store release checklists.
 - Create Supabase project (region: Mumbai) and share project ref / keys securely.
 - Create Firebase project, add Android + iOS apps, download config files, enable
   Phone Auth, Blaze billing with a budget alert, App Check.
+- Upgrade the Firebase project to Identity Platform (Authentication → Settings →
+  "Upgrade to Identity Platform") — required before the `beforeSignIn` blocking function
+  (rule 14) can be deployed.
+- Deploy the `beforeSignIn` blocking function once Blaze + Identity Platform are on:
+  `npx firebase-tools deploy --only functions:beforeSignIn --project balajiinfraandhostel`
+  from `firebase/` (see `firebase/README.md`).
 - Configure Supabase third-party auth (Firebase) in the dashboard if CLI can't.
 - Razorpay account, KYC with Razorpay, API keys, webhook secret.
 - Apple Developer + Google Play accounts.

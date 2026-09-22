@@ -1,0 +1,25 @@
+{
+  "name": "balajiinfra-firebase-functions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Firebase Cloud Functions (2nd gen) for the tenant Firebase Auth project. Currently just the beforeSignIn blocking function that sets the role: \"authenticated\" custom claim Supabase's third-party Firebase auth integration requires (see CLAUDE.md §4 rule 14).",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "npm run build && firebase deploy --only functions:beforeSignIn",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
