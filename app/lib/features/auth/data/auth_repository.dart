@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/phone.dart';
+import '../../../core/tenant_not_resolvable_exception.dart';
 
 class AuthRepository {
   AuthRepository(this._firebaseAuth, this._supabase);
@@ -74,7 +75,9 @@ class AuthRepository {
     final response = await _supabase.functions.invoke('link-firebase-uid');
     final data = response.data;
     if (data is! Map || data['linked'] != true) {
-      throw StateError('Failed to link tenant account: ${response.data}');
+      throw TenantNotResolvableException(
+        'Failed to link tenant account: ${response.data}',
+      );
     }
   }
 

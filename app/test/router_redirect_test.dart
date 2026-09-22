@@ -134,13 +134,20 @@ void main() {
     });
 
     test(
-      'bounces an approved tenant off login/consent/pending back to home',
+      'bounces an approved tenant off login/consent/pending/splash/startup-error '
+      'back to home',
       () {
         const approved = TenantStatus(
           hasConsent: true,
           kycStatus: KycStatus.approved,
         );
-        for (final stale in [loginPath, consentPath, kycPendingPath]) {
+        for (final stale in [
+          loginPath,
+          consentPath,
+          kycPendingPath,
+          splashPath,
+          startupErrorPath,
+        ]) {
           expect(
             resolveRedirect(
               belowMinVersion: false,
@@ -167,6 +174,83 @@ void main() {
             tenantResolutionFailed: true,
           ),
           loginPath,
+        );
+      },
+    );
+
+    test('moves a signed-out user off the splash screen to login once resolved', () {
+      expect(
+        resolveRedirect(
+          belowMinVersion: false,
+          matchedLocation: splashPath,
+          isSignedIn: false,
+          tenantResolutionFailed: false,
+        ),
+        loginPath,
+      );
+    });
+
+    test(
+      'moves a signed-in, not-yet-resolved tenant off the splash screen to consent',
+      () {
+        expect(
+          resolveRedirect(
+            belowMinVersion: false,
+            matchedLocation: splashPath,
+            isSignedIn: true,
+            tenantResolutionFailed: false,
+            tenantStatus: const TenantStatus(
+              hasConsent: false,
+              kycStatus: KycStatus.notStarted,
+            ),
+          ),
+          consentPath,
+        );
+      },
+    );
+
+    test('sends a startupError to the startup-error screen from anywhere', () {
+      expect(
+        resolveRedirect(
+          belowMinVersion: false,
+          matchedLocation: splashPath,
+          isSignedIn: false,
+          tenantResolutionFailed: false,
+          startupError: Exception('unreachable'),
+        ),
+        startupErrorPath,
+      );
+    });
+
+    test('does not loop once already on the startup-error screen', () {
+      expect(
+        resolveRedirect(
+          belowMinVersion: false,
+          matchedLocation: startupErrorPath,
+          isSignedIn: false,
+          tenantResolutionFailed: false,
+          startupError: Exception('unreachable'),
+        ),
+        isNull,
+      );
+    });
+
+    test(
+      'startupError takes priority over belowMinVersion and every other field',
+      () {
+        expect(
+          resolveRedirect(
+            belowMinVersion: true,
+            matchedLocation: homePath,
+            isSignedIn: true,
+            tenantResolutionFailed: true,
+            tenantStatus: const TenantStatus(
+              hasConsent: true,
+              kycStatus: KycStatus.approved,
+            ),
+            startupError: Exception('unreachable'),
+          ),
+          startupErrorPath,
         );
       },
     );

@@ -13,6 +13,12 @@ final appConfigRepositoryProvider = Provider<AppConfigRepository>((ref) {
 /// True if the installed build is older than `app_config.min_app_version` for this
 /// platform (CLAUDE.md §4 rule 30). `false` (never block) if no minimum is configured yet
 /// or the platform is neither Android nor iOS (e.g. running tests).
+///
+/// `retry: (_, __) => null` disables Riverpod 3's default automatic-retry-with-backoff —
+/// this provider is watched from `startupResolutionProvider`'s guard chain
+/// (startup_resolution_provider.dart), which already wraps every step in its own bounded
+/// timeout; a Riverpod-level retry underneath would keep this provider "loading" well past
+/// that timeout, so the outer wrapper would see a timeout instead of the real error/result.
 final belowMinVersionProvider = FutureProvider.autoDispose<bool>((ref) async {
   if (!Platform.isAndroid && !Platform.isIOS) return false;
 
@@ -23,7 +29,7 @@ final belowMinVersionProvider = FutureProvider.autoDispose<bool>((ref) async {
 
   final packageInfo = await PackageInfo.fromPlatform();
   return _isOlder(packageInfo.version, minVersion);
-});
+}, retry: (retryCount, error) => null);
 
 /// Compares dotted version strings ("1.2.0" vs "1.10.0") numerically per segment, not
 /// lexicographically.

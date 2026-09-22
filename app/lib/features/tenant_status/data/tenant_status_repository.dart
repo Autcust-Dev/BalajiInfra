@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/tenant_not_resolvable_exception.dart';
 import 'tenant_status.dart';
 
 class TenantStatusRepository {
@@ -18,7 +19,9 @@ class TenantStatusRepository {
     if (tenantRow == null) {
       // firebase_uid was linked but the row is no longer visible (e.g. moved out) — RLS
       // already refuses this tenant's data; treat as "not usable" rather than crashing.
-      throw StateError('No accessible tenant row for the signed-in account.');
+      throw TenantNotResolvableException(
+        'No accessible tenant row for the signed-in account.',
+      );
     }
 
     final consentRow = await _supabase

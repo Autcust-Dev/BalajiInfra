@@ -15,9 +15,14 @@ final tenantStatusRepositoryProvider = Provider<TenantStatusRepository>((ref) {
 ///
 /// Waits on [linkTenantProvider] first — until firebase_uid is linked, is_tenant() is
 /// false and this query would just come back empty under RLS.
+///
+/// `retry: (_, __) => null` disables Riverpod 3's default automatic-retry-with-backoff —
+/// see the matching note on `belowMinVersionProvider` (min_version_provider.dart): this
+/// provider is watched from `startupResolutionProvider`'s bounded-timeout guard chain, so a
+/// Riverpod-level retry underneath would mask the outer timeout.
 final tenantStatusProvider = FutureProvider.autoDispose<TenantStatus>((
   ref,
 ) async {
   await ref.watch(linkTenantProvider.future);
   return ref.watch(tenantStatusRepositoryProvider).fetch();
-});
+}, retry: (retryCount, error) => null);

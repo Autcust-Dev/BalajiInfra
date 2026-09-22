@@ -10,12 +10,12 @@ Supabase + Firebase backend. Full product and architecture rules live in
 /
 ├── package.json  Root tooling only — holds the Supabase CLI devDependency
 ├── admin/        React + TypeScript admin panel (Vite, static SPA)
-├── app/          Flutter mobile app                                        [pending — see below]
+├── app/          Flutter mobile app
 └── supabase/     Supabase CLI project (migrations, functions, pgTAP tests)
 ```
 
-`app/` is not scaffolded yet — it requires the Flutter SDK, which isn't part of
-this repo. See "Status" below.
+`app/` requires the Flutter SDK, which isn't part of this repo. See "Status" below and
+"Local setup — app".
 
 ## Status
 
@@ -28,8 +28,10 @@ this repo. See "Status" below.
   connected via the Supabase GitHub integration — merges to `main` auto-deploy
   migrations to production, so treat any PR touching `supabase/migrations/` as a
   production change.
-- ⏳ **app/** — pending, paused. Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install)
-  installed locally, then `flutter create app` (existing Flutter code will be moved in).
+- 🚧 **app/** — Phase 3 (login) in progress: OTP flow, Supabase third-party auth wiring,
+  firebase_uid linking, session persistence, go_router guard chain with a bounded-timeout
+  startup sequence (splash screen / friendly error + Retry — never a black screen). Manual
+  testing has only been done against local Docker so far; see "Local setup — app".
 
 ## Local setup — admin panel
 
@@ -184,9 +186,37 @@ enrollment instead.
   Their next login attempt will find no enrolled factor and land on the enrollment
   screen automatically — no other cleanup needed.
 
-## Local setup — app (pending)
+## Local setup — app
 
-Not available yet — see "Status" above.
+Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install).
+
+```sh
+cd app
+flutter pub get
+cp .env.example .env.local   # local Docker Supabase (`supabase start`)
+cp .env.example .env.prod    # hosted (balajiinfraandhostel) Supabase project — fill in
+                              # SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY from
+                              # Dashboard → Settings → API; never commit this file
+```
+
+Both `.env.local` and `.env.prod` are gitignored — see `.env.example` for what each
+variable means and how `SUPABASE_URL` differs by device (simulator vs. emulator vs. real
+phone) for the local case.
+
+Run against whichever backend you mean, **explicitly** — there is no default:
+
+```sh
+flutter run --dart-define-from-file=.env.local   # local Docker Supabase
+flutter run --dart-define-from-file=.env.prod    # hosted
+```
+
+A debug build shows a small **LOCAL** (blue) or **PROD** (red) tag in the top-left corner
+at all times (`core/environment_label.dart`) — check it before testing anything, especially
+before running against `.env.prod`, since that talks to the real hosted project. The tag
+never appears in release builds.
+
+`flutter analyze` (zero issues) and `flutter test` don't need either `.env` file — CI
+(`.github/workflows/app.yml`) runs both without one.
 
 ## Deployment — admin panel
 

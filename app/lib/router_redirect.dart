@@ -15,7 +15,15 @@ String? resolveRedirect({
   required bool isSignedIn,
   required bool tenantResolutionFailed,
   TenantStatus? tenantStatus,
+  Object? startupError,
 }) {
+  // A timeout or transport failure on any startup step (min-version check, tenant link,
+  // tenant status) — none of the other fields are trustworthy yet, so this takes priority
+  // over everything else below.
+  if (startupError != null) {
+    return matchedLocation == startupErrorPath ? null : startupErrorPath;
+  }
+
   if (belowMinVersion) {
     return matchedLocation == updateRequiredPath ? null : updateRequiredPath;
   }
@@ -42,9 +50,11 @@ String? resolveRedirect({
     return matchedLocation == kycPendingPath ? null : kycPendingPath;
   }
 
-  final onAuthOrKycRoute =
+  final onGateRoute =
       atLogin ||
       matchedLocation == consentPath ||
-      matchedLocation == kycPendingPath;
-  return onAuthOrKycRoute ? homePath : null;
+      matchedLocation == kycPendingPath ||
+      matchedLocation == splashPath ||
+      matchedLocation == startupErrorPath;
+  return onGateRoute ? homePath : null;
 }
