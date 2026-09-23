@@ -72,11 +72,28 @@ class AuthRepository {
   /// Links the just-authenticated Firebase UID onto the matching `tenants` row (Phase 3
   /// first-login flow). Idempotent — safe to call again on every app start once signed in.
   Future<void> linkFirebaseUid() async {
-    final response = await _supabase.functions.invoke('link-firebase-uid');
-    final data = response.data;
-    if (data is! Map || data['linked'] != true) {
+    final Map<String, dynamic> response;
+    try {
+      final result = await _supabase.functions.invoke('link-firebase-uid');
+      response = result.data is Map<String, dynamic>
+          ? result.data as Map<String, dynamic>
+          : <String, dynamic>{};
+    } on FunctionsHttpException catch (error) {
+      // 404 "no matching tenant" and 409 "unable to link" (link-firebase-uid/index.ts) are
+      // expected business-logic outcomes, not a transport failure — e.g. an admin deleted
+      // the tenant mid-flow, or someone else's session already linked this phone number.
+      // A FunctionsFetchException (network/transport failure, no response received) isn't
+      // caught here and still propagates as a real startup error, same as any 5xx.
+      if (error.status == 404 || error.status == 409) {
+        throw TenantNotResolvableException(
+          'Failed to link tenant account: ${error.details}',
+        );
+      }
+      rethrow;
+    }
+    if (response['linked'] != true) {
       throw TenantNotResolvableException(
-        'Failed to link tenant account: ${response.data}',
+        'Failed to link tenant account: $response',
       );
     }
   }
