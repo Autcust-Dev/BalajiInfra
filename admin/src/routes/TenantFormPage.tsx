@@ -84,10 +84,28 @@ function useRoomsForProperty(propertyId: string | undefined) {
   })
 }
 
+function useUnpaidDuesTotal(tenantId: string) {
+  return useQuery({
+    queryKey: ['unpaid-dues-total', tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dues')
+        .select('amount_paise')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'unpaid')
+      if (error) throw error
+      return data.reduce((sum, d) => sum + d.amount_paise, 0)
+    },
+  })
+}
+
 function MoveOutDialog({ tenantId, tenantName }: { tenantId: string; tenantName: string }) {
   const navigate = useNavigate()
   const [moveOutDate, setMoveOutDate] = useState(new Date().toISOString().slice(0, 10))
   const [submitting, setSubmitting] = useState(false)
+  // Admin can still move the tenant out — this is a warning, not a hard block: real-world
+  // write-offs and disputes happen, and the due stays against the tenant either way.
+  const { data: unpaidTotal } = useUnpaidDuesTotal(tenantId)
 
   async function confirmMoveOut() {
     setSubmitting(true)
@@ -115,6 +133,12 @@ function MoveOutDialog({ tenantId, tenantName }: { tenantId: string; tenantName:
           <AlertDialogDescription>
             This immediately revokes all of their app access — they won't even be able to see their
             own tenant record anymore. This can't be undone from the app.
+            {!!unpaidTotal && unpaidTotal > 0 && (
+              <span className="text-destructive mt-2 block font-medium">
+                This tenant has ₹{paiseToRupees(unpaidTotal).toLocaleString('en-IN')} unpaid — move
+                out anyway?
+              </span>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-2 py-2">

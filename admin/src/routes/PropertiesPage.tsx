@@ -173,6 +173,9 @@ export function PropertiesPage() {
               <TableCell>{property.address}</TableCell>
               <TableCell className="flex justify-end gap-2">
                 <Button asChild variant="outline" size="sm">
+                  <Link to={`/properties/${property.id}/structure`}>Floors &amp; blocks</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
                   <Link to={`/properties/${property.id}/rooms`}>Rooms</Link>
                 </Button>
                 {isOwner && (
