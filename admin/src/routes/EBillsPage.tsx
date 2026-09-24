@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sharingTypeLabel } from '@/lib/rooms'
 import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
@@ -69,13 +70,29 @@ function useRoomsForProperty(propertyId: string | undefined) {
   })
 }
 
+function useUnitsForRoom(roomId: string | undefined) {
+  return useQuery({
+    queryKey: ['room-units', roomId],
+    enabled: !!roomId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('room_units')
+        .select('id, capacity')
+        .eq('room_id', roomId!)
+        .order('capacity')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
 function useBills() {
   return useQuery({
     queryKey: ['electricity-bills'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('electricity_bills')
-        .select('*, rooms(room_number, properties(name))')
+        .select('*, room_units(capacity, rooms(room_number, properties(name)))')
         .order('billing_period', { ascending: false })
       if (error) throw error
       return data
@@ -86,6 +103,7 @@ function useBills() {
 const billSchema = z.object({
   property_id: z.string().min(1, 'Select a property'),
   room_id: z.string().min(1, 'Select a room'),
+  room_unit_id: z.string().min(1, 'Select a sharing type'),
   billing_month: z.string().min(1, 'Select a billing month'), // <input type="month"> value, "YYYY-MM"
   total_amount_rupees: z
     .number({ error: 'Enter the total bill amount' })
@@ -100,16 +118,24 @@ function AddBillDialog() {
   const { data: properties } = usePropertiesQuery()
   const form = useForm<BillValues>({
     resolver: zodResolver(billSchema),
-    defaultValues: { property_id: '', room_id: '', billing_month: '', total_amount_rupees: 0 },
+    defaultValues: {
+      property_id: '',
+      room_id: '',
+      room_unit_id: '',
+      billing_month: '',
+      total_amount_rupees: 0,
+    },
   })
   const propertyId = form.watch('property_id')
   const { data: rooms } = useRoomsForProperty(propertyId || undefined)
+  const roomId = form.watch('room_id')
+  const { data: units } = useUnitsForRoom(roomId || undefined)
 
   async function onSubmit(values: BillValues) {
     if (!adminProfile) return
     const billing_period = `${values.billing_month}-01`
     const { error } = await supabase.from('electricity_bills').insert({
-      room_id: values.room_id,
+      room_unit_id: values.room_unit_id,
       billing_period,
       total_amount_paise: rupeesToPaise(values.total_amount_rupees),
       created_by: adminProfile.id,
@@ -153,6 +179,7 @@ function AddBillDialog() {
                     onValueChange={(v) => {
                       field.onChange(v)
                       form.setValue('room_id', '')
+                      form.setValue('room_unit_id', '')
                     }}
                   >
                     <FormControl>
@@ -178,7 +205,14 @@ function AddBillDialog() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Room</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange} disabled={!propertyId}>
+                  <Select
+                    value={field.value}
+                    onValueChange={(v) => {
+                      field.onChange(v)
+                      form.setValue('room_unit_id', '')
+                    }}
+                    disabled={!propertyId}
+                  >
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a room" />
@@ -192,6 +226,35 @@ function AddBillDialog() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="room_unit_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sharing type</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange} disabled={!roomId}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a sharing type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {units?.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {sharingTypeLabel(u.capacity)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {roomId && units?.length === 0 && (
+                    <p className="text-muted-foreground text-sm">
+                      This room has no sharing units yet — add one from the Rooms page first.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -225,8 +288,9 @@ function AddBillDialog() {
                     />
                   </FormControl>
                   <p className="text-muted-foreground text-xs">
-                    Split evenly among the room&rsquo;s active tenants automatically — you can edit
-                    any tenant&rsquo;s share afterward.
+                    Split evenly among this sharing unit&rsquo;s active tenants automatically — a
+                    single-sharing unit is never split, and you can edit any tenant&rsquo;s share
+                    afterward.
                   </p>
                   <FormMessage />
                 </FormItem>
@@ -257,6 +321,7 @@ export function EBillsPage() {
           <TableRow>
             <TableHead>Property</TableHead>
             <TableHead>Room</TableHead>
+            <TableHead>Sharing</TableHead>
             <TableHead>Month</TableHead>
             <TableHead>Total</TableHead>
             <TableHead className="w-24" />
@@ -265,20 +330,23 @@ export function EBillsPage() {
         <TableBody>
           {isLoading && (
             <TableRow>
-              <TableCell colSpan={5}>Loading…</TableCell>
+              <TableCell colSpan={6}>Loading…</TableCell>
             </TableRow>
           )}
           {bills?.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-muted-foreground">
+              <TableCell colSpan={6} className="text-muted-foreground">
                 No bills yet.
               </TableCell>
             </TableRow>
           )}
           {bills?.map((bill) => (
             <TableRow key={bill.id}>
-              <TableCell>{bill.rooms?.properties?.name}</TableCell>
-              <TableCell>{bill.rooms?.room_number}</TableCell>
+              <TableCell>{bill.room_units?.rooms?.properties?.name}</TableCell>
+              <TableCell>{bill.room_units?.rooms?.room_number}</TableCell>
+              <TableCell>
+                {bill.room_units ? sharingTypeLabel(bill.room_units.capacity) : ''}
+              </TableCell>
               <TableCell>
                 {new Date(bill.billing_period).toLocaleDateString('en-IN', {
                   month: 'long',

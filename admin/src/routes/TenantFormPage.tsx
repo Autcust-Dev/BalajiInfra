@@ -41,8 +41,8 @@ const tenantFormSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
   phone: phoneSchema,
   property_id: z.string().min(1, 'Select a property'),
-  sharing_type: z.string().min(1, 'Select a sharing type'),
   room_id: z.string().min(1, 'Select a room'),
+  room_unit_id: z.string().min(1, 'Select a sharing type'),
   move_in_date: z.string().min(1, 'Move-in date is required'),
   billing_cycle: z.enum(['monthly', 'yearly']),
   monthly_rent_rupees: rupeesSchema,
@@ -62,27 +62,64 @@ function usePropertiesQuery() {
 
 function useRoomsForProperty(propertyId: string | undefined) {
   return useQuery({
-    queryKey: ['rooms', propertyId],
+    queryKey: ['rooms-simple', propertyId],
     enabled: !!propertyId,
     queryFn: async () => {
-      const [roomsRes, tenantsRes] = await Promise.all([
-        supabase.from('rooms').select('*').eq('property_id', propertyId!).order('room_number'),
-        supabase
-          .from('tenants')
-          .select('room_id')
-          .eq('property_id', propertyId!)
-          .eq('status', 'active'),
-      ])
-      if (roomsRes.error) throw roomsRes.error
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('id, room_number')
+        .eq('property_id', propertyId!)
+        .order('room_number')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+function useUnitsForRoom(roomId: string | undefined) {
+  return useQuery({
+    queryKey: ['room-units', roomId],
+    enabled: !!roomId,
+    queryFn: async () => {
+      const unitsRes = await supabase
+        .from('room_units')
+        .select('*')
+        .eq('room_id', roomId!)
+        .order('capacity')
+      if (unitsRes.error) throw unitsRes.error
+
+      const unitIds = unitsRes.data.map((u) => u.id)
+      const tenantsRes =
+        unitIds.length === 0
+          ? { data: [], error: null }
+          : await supabase
+              .from('tenants')
+              .select('room_unit_id')
+              .eq('status', 'active')
+              .in('room_unit_id', unitIds)
       if (tenantsRes.error) throw tenantsRes.error
-      const occupancyByRoom = new Map<string, number>()
+
+      const occupancyByUnit = new Map<string, number>()
       for (const t of tenantsRes.data) {
-        occupancyByRoom.set(t.room_id, (occupancyByRoom.get(t.room_id) ?? 0) + 1)
+        occupancyByUnit.set(t.room_unit_id, (occupancyByUnit.get(t.room_unit_id) ?? 0) + 1)
       }
-      return roomsRes.data.map((room) => ({
-        ...room,
-        occupancy: occupancyByRoom.get(room.id) ?? 0,
-      }))
+      return unitsRes.data.map((u) => ({ ...u, occupancy: occupancyByUnit.get(u.id) ?? 0 }))
+    },
+  })
+}
+
+function useTenantRoomInfo(roomUnitId: string | undefined) {
+  return useQuery({
+    queryKey: ['tenant-room-info', roomUnitId],
+    enabled: !!roomUnitId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('room_units')
+        .select('room_id')
+        .eq('id', roomUnitId!)
+        .single()
+      if (error) throw error
+      return data
     },
   })
 }
@@ -197,47 +234,47 @@ export function TenantFormPage() {
       full_name: '',
       phone: '',
       property_id: '',
-      sharing_type: '',
       room_id: '',
+      room_unit_id: '',
       move_in_date: new Date().toISOString().slice(0, 10),
       billing_cycle: 'monthly',
       monthly_rent_rupees: 0,
     },
   })
 
+  // When editing, the tenant only stores room_unit_id — look up which physical room it
+  // belongs to so the Room dropdown can be pre-selected before the unit list loads.
+  const { data: tenantRoomInfo } = useTenantRoomInfo(isEditing ? tenant?.room_unit_id : undefined)
+
   const propertyId = form.watch('property_id')
   const { data: rooms } = useRoomsForProperty(propertyId || tenant?.property_id)
+  const roomId = form.watch('room_id')
+  const { data: units } = useUnitsForRoom(roomId || undefined)
 
   useEffect(() => {
-    if (tenant && rooms) {
-      const currentRoom = rooms.find((r) => r.id === tenant.room_id)
+    if (tenant && tenantRoomInfo) {
       form.reset({
         full_name: tenant.full_name,
         phone: tenant.phone,
         property_id: tenant.property_id,
-        sharing_type: currentRoom ? String(currentRoom.capacity) : '',
-        room_id: tenant.room_id,
+        room_id: tenantRoomInfo.room_id,
+        room_unit_id: tenant.room_unit_id,
         move_in_date: tenant.move_in_date,
         billing_cycle: tenant.billing_cycle,
         monthly_rent_rupees: paiseToRupees(tenant.monthly_rent_paise),
       })
     }
-  }, [tenant, rooms, form])
+  }, [tenant, tenantRoomInfo, form])
 
-  const sharingType = form.watch('sharing_type')
-  const sharingTypes = Array.from(new Set(rooms?.map((r) => r.capacity) ?? [])).sort(
-    (a, b) => a - b,
-  )
-  const roomsForSharingType = rooms?.filter((r) => String(r.capacity) === sharingType) ?? []
-  const selectedRoom = rooms?.find((r) => r.id === form.watch('room_id'))
-  const roomIsFull = selectedRoom ? selectedRoom.occupancy >= selectedRoom.capacity : false
+  const selectedUnit = units?.find((u) => u.id === form.watch('room_unit_id'))
+  const unitIsFull = selectedUnit ? selectedUnit.occupancy >= selectedUnit.capacity : false
 
   async function onSubmit(values: TenantFormValues) {
     const payload = {
       full_name: values.full_name,
       phone: values.phone,
       property_id: values.property_id,
-      room_id: values.room_id,
+      room_unit_id: values.room_unit_id,
       move_in_date: values.move_in_date,
       billing_cycle: values.billing_cycle,
       monthly_rent_paise: rupeesToPaise(values.monthly_rent_rupees),
@@ -312,8 +349,8 @@ export function TenantFormPage() {
                   value={field.value}
                   onValueChange={(v) => {
                     field.onChange(v)
-                    form.setValue('sharing_type', '')
                     form.setValue('room_id', '')
+                    form.setValue('room_unit_id', '')
                   }}
                 >
                   <FormControl>
@@ -335,27 +372,27 @@ export function TenantFormPage() {
           />
           <FormField
             control={form.control}
-            name="sharing_type"
+            name="room_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Sharing type</FormLabel>
+                <FormLabel>Room</FormLabel>
                 <Select
                   value={field.value}
                   onValueChange={(v) => {
                     field.onChange(v)
-                    form.setValue('room_id', '')
+                    form.setValue('room_unit_id', '')
                   }}
                   disabled={!propertyId}
                 >
                   <FormControl>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a sharing type" />
+                      <SelectValue placeholder="Select a room" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {sharingTypes.map((capacity) => (
-                      <SelectItem key={capacity} value={String(capacity)}>
-                        {sharingTypeLabel(capacity)}
+                    {rooms?.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.room_number}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -366,27 +403,32 @@ export function TenantFormPage() {
           />
           <FormField
             control={form.control}
-            name="room_id"
+            name="room_unit_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Room</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={!sharingType}>
+                <FormLabel>Sharing type</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange} disabled={!roomId}>
                   <FormControl>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a room" />
+                      <SelectValue placeholder="Select a sharing type" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {roomsForSharingType.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.room_number} ({r.occupancy}/{r.capacity})
+                    {units?.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {sharingTypeLabel(u.capacity)} ({u.occupancy}/{u.capacity})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {roomIsFull && (
+                {roomId && units?.length === 0 && (
+                  <p className="text-muted-foreground text-sm">
+                    This room has no sharing units yet — add one from the Rooms page first.
+                  </p>
+                )}
+                {unitIsFull && (
                   <p className="text-destructive text-sm">
-                    This room is already at capacity — you can still assign the tenant, but double
+                    This unit is already at capacity — you can still assign the tenant, but double
                     check that's intended.
                   </p>
                 )}

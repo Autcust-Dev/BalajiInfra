@@ -62,8 +62,8 @@ select lives_ok(
 
 -- Tenant cannot insert or delete tenants at all (no self-registration — CLAUDE.md rule 1).
 select throws_ok(
-  $$ insert into public.tenants (property_id, room_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)
-     values ('33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444', 'Self Registered', '+919876500009', 'active', 'not_started', now(), 100000) $$,
+  $$ insert into public.tenants (property_id, room_unit_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)
+     values ('33333333-3333-3333-3333-333333333333', 'b4444444-4444-4444-4444-444444444444', 'Self Registered', '+919876500009', 'active', 'not_started', now(), 100000) $$,
   '42501',
   null,
   'tenant cannot self-register'

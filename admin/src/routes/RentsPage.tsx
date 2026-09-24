@@ -40,6 +40,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth-context'
+import { sharingTypeLabel } from '@/lib/rooms'
 import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
@@ -61,7 +62,9 @@ function useRentsData(propertyId: string | undefined) {
     queryFn: async () => {
       const { data: tenants, error: tenantsError } = await supabase
         .from('tenants')
-        .select('id, full_name, monthly_rent_paise, billing_cycle, rooms(room_number)')
+        .select(
+          'id, full_name, monthly_rent_paise, billing_cycle, room_units(capacity, rooms(room_number))',
+        )
         .eq('property_id', propertyId!)
         .eq('status', 'active')
         .order('full_name')
@@ -358,7 +361,10 @@ export function RentsPage() {
             return (
               <TableRow key={tenant.id}>
                 <TableCell>{tenant.full_name}</TableCell>
-                <TableCell className="text-muted-foreground">{tenant.rooms?.room_number}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {tenant.room_units?.rooms?.room_number}
+                  {tenant.room_units ? ` · ${sharingTypeLabel(tenant.room_units.capacity)}` : ''}
+                </TableCell>
                 <TableCell className="capitalize">{tenant.billing_cycle}</TableCell>
                 <TableCell>
                   ₹{paiseToRupees(tenant.monthly_rent_paise).toLocaleString('en-IN')}
