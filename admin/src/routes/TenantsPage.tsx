@@ -1,10 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { flexRender, tableFeatures, useTable, type ColumnDef } from '@tanstack/react-table'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -33,40 +35,60 @@ const PAGE_SIZE = 20
 // needed here, just column definitions + row rendering.
 const features = tableFeatures({})
 
-const columns: ColumnDef<typeof features, Tenant>[] = [
-  { accessorKey: 'full_name', header: 'Name' },
-  { accessorKey: 'phone', header: 'Phone' },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ row }) => (
-      <Badge variant={row.original.status === 'active' ? 'secondary' : 'outline'}>
-        {row.original.status}
-      </Badge>
-    ),
-  },
-  { accessorKey: 'kyc_status', header: 'KYC' },
-  {
-    accessorKey: 'monthly_rent_paise',
-    header: 'Rent',
-    cell: ({ row }) => `₹${paiseToRupees(row.original.monthly_rent_paise).toLocaleString('en-IN')}`,
-  },
-  {
-    id: 'actions',
-    header: '',
-    cell: ({ row }) => (
-      <Button asChild variant="outline" size="sm">
-        <Link to={`/tenants/${row.original.id}/edit`}>Edit</Link>
-      </Button>
-    ),
-  },
-]
+function buildColumns(
+  selected: Set<string>,
+  toggleSelected: (id: string) => void,
+): ColumnDef<typeof features, Tenant>[] {
+  return [
+    {
+      id: 'select',
+      header: '',
+      cell: ({ row }) =>
+        row.original.status === 'moved_out' ? (
+          <Checkbox
+            checked={selected.has(row.original.id)}
+            onCheckedChange={() => toggleSelected(row.original.id)}
+          />
+        ) : null,
+    },
+    { accessorKey: 'full_name', header: 'Name' },
+    { accessorKey: 'phone', header: 'Phone' },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <Badge variant={row.original.status === 'active' ? 'secondary' : 'outline'}>
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    { accessorKey: 'kyc_status', header: 'KYC' },
+    {
+      accessorKey: 'monthly_rent_paise',
+      header: 'Rent',
+      cell: ({ row }) =>
+        `₹${paiseToRupees(row.original.monthly_rent_paise).toLocaleString('en-IN')}`,
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <Button asChild variant="outline" size="sm">
+          <Link to={`/tenants/${row.original.id}/edit`}>Edit</Link>
+        </Button>
+      ),
+    },
+  ]
+}
 
 export function TenantsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | Tenant['status']>('all')
   const [kycFilter, setKycFilter] = useState<'all' | Tenant['kyc_status']>('all')
   const [page, setPage] = useState(0)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
+  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['tenants', search, statusFilter, kycFilter, page],
@@ -89,6 +111,36 @@ export function TenantsPage() {
     },
   })
 
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function bulkDelete() {
+    setDeleting(true)
+    const ids = Array.from(selected)
+    let failed = 0
+    for (const id of ids) {
+      const { error } = await supabase.from('tenants').delete().eq('id', id)
+      if (error) failed += 1
+    }
+    setDeleting(false)
+    setSelected(new Set())
+    await queryClient.invalidateQueries({ queryKey: ['tenants'] })
+    if (failed > 0) {
+      toast.error(
+        `${ids.length - failed} deleted, ${failed} could not be deleted — they likely have dues or payment history.`,
+      )
+    } else {
+      toast.success(`${ids.length} tenant${ids.length === 1 ? '' : 's'} deleted`)
+    }
+  }
+
+  const columns = buildColumns(selected, toggleSelected)
   const table = useTable({
     features,
     data: data?.rows ?? [],
@@ -154,6 +206,20 @@ export function TenantsPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {selected.size > 0 && (
+        <div className="bg-muted flex items-center justify-between rounded-md p-2">
+          <span className="text-sm">{selected.size} selected</span>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => void bulkDelete()}
+            disabled={deleting}
+          >
+            Delete selected
+          </Button>
+        </div>
+      )}
 
       <Table>
         <TableHeader>

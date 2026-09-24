@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { sharingTypeLabel } from '@/lib/rooms'
 import { phoneSchema, rupeesSchema, paiseToRupees, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
@@ -40,8 +41,10 @@ const tenantFormSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
   phone: phoneSchema,
   property_id: z.string().min(1, 'Select a property'),
+  sharing_type: z.string().min(1, 'Select a sharing type'),
   room_id: z.string().min(1, 'Select a room'),
   move_in_date: z.string().min(1, 'Move-in date is required'),
+  billing_cycle: z.enum(['monthly', 'yearly']),
   monthly_rent_rupees: rupeesSchema,
 })
 type TenantFormValues = z.infer<typeof tenantFormSchema>
@@ -194,27 +197,38 @@ export function TenantFormPage() {
       full_name: '',
       phone: '',
       property_id: '',
+      sharing_type: '',
       room_id: '',
       move_in_date: new Date().toISOString().slice(0, 10),
+      billing_cycle: 'monthly',
       monthly_rent_rupees: 0,
     },
   })
 
+  const propertyId = form.watch('property_id')
+  const { data: rooms } = useRoomsForProperty(propertyId || tenant?.property_id)
+
   useEffect(() => {
-    if (tenant) {
+    if (tenant && rooms) {
+      const currentRoom = rooms.find((r) => r.id === tenant.room_id)
       form.reset({
         full_name: tenant.full_name,
         phone: tenant.phone,
         property_id: tenant.property_id,
+        sharing_type: currentRoom ? String(currentRoom.capacity) : '',
         room_id: tenant.room_id,
         move_in_date: tenant.move_in_date,
+        billing_cycle: tenant.billing_cycle,
         monthly_rent_rupees: paiseToRupees(tenant.monthly_rent_paise),
       })
     }
-  }, [tenant, form])
+  }, [tenant, rooms, form])
 
-  const propertyId = form.watch('property_id')
-  const { data: rooms } = useRoomsForProperty(propertyId || undefined)
+  const sharingType = form.watch('sharing_type')
+  const sharingTypes = Array.from(new Set(rooms?.map((r) => r.capacity) ?? [])).sort(
+    (a, b) => a - b,
+  )
+  const roomsForSharingType = rooms?.filter((r) => String(r.capacity) === sharingType) ?? []
   const selectedRoom = rooms?.find((r) => r.id === form.watch('room_id'))
   const roomIsFull = selectedRoom ? selectedRoom.occupancy >= selectedRoom.capacity : false
 
@@ -225,6 +239,7 @@ export function TenantFormPage() {
       property_id: values.property_id,
       room_id: values.room_id,
       move_in_date: values.move_in_date,
+      billing_cycle: values.billing_cycle,
       monthly_rent_paise: rupeesToPaise(values.monthly_rent_rupees),
     }
 
@@ -297,6 +312,7 @@ export function TenantFormPage() {
                   value={field.value}
                   onValueChange={(v) => {
                     field.onChange(v)
+                    form.setValue('sharing_type', '')
                     form.setValue('room_id', '')
                   }}
                 >
@@ -319,18 +335,49 @@ export function TenantFormPage() {
           />
           <FormField
             control={form.control}
+            name="sharing_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Sharing type</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v)
+                    form.setValue('room_id', '')
+                  }}
+                  disabled={!propertyId}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a sharing type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {sharingTypes.map((capacity) => (
+                      <SelectItem key={capacity} value={String(capacity)}>
+                        {sharingTypeLabel(capacity)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="room_id"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Room</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={!propertyId}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={!sharingType}>
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a room" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {rooms?.map((r) => (
+                    {roomsForSharingType.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
                         {r.room_number} ({r.occupancy}/{r.capacity})
                       </SelectItem>
@@ -362,10 +409,31 @@ export function TenantFormPage() {
           />
           <FormField
             control={form.control}
+            name="billing_cycle"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Billing cycle</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="monthly_rent_rupees"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Monthly rent (₹)</FormLabel>
+                <FormLabel>Rent amount (₹)</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

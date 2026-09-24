@@ -68,7 +68,6 @@ function useRentsData(propertyId: string | undefined) {
       if (tenantsError) throw tenantsError
 
       const tenantIds = tenants.map((t) => t.id)
-      if (tenantIds.length === 0) return { tenants: [], duesByTenant: new Map() }
 
       const { data: dues, error: duesError } = await supabase
         .from('dues')
@@ -98,10 +97,12 @@ function AddRentDueButton({
   tenantId,
   amountPaise,
   propertyId,
+  hasUnpaidDue,
 }: {
   tenantId: string
   amountPaise: number
   propertyId: string
+  hasUnpaidDue: boolean
 }) {
   const queryClient = useQueryClient()
   const { adminProfile } = useAuth()
@@ -131,7 +132,13 @@ function AddRentDueButton({
   }
 
   return (
-    <Button size="sm" variant="outline" onClick={() => void addDue()} disabled={loading}>
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => void addDue()}
+      disabled={loading || hasUnpaidDue}
+      title={hasUnpaidDue ? 'This tenant already has an unpaid rent due' : undefined}
+    >
       Add rent due
     </Button>
   )
@@ -269,7 +276,7 @@ export function RentsPage() {
   const { data, isLoading } = useRentsData(activePropertyId)
 
   const tenants = data?.tenants ?? []
-  const duesByTenant = data?.duesByTenant ?? new Map()
+  const duesByTenant: NonNullable<typeof data>['duesByTenant'] = data?.duesByTenant ?? new Map()
 
   let totalExpected = 0
   let totalPending = 0
@@ -347,6 +354,7 @@ export function RentsPage() {
           {tenants.map((tenant) => {
             const dues = duesByTenant.get(tenant.id) ?? []
             const latestDue = dues[0]
+            const hasUnpaidDue = dues.some((d) => d.status === 'unpaid')
             return (
               <TableRow key={tenant.id}>
                 <TableCell>{tenant.full_name}</TableCell>
@@ -370,6 +378,7 @@ export function RentsPage() {
                     tenantId={tenant.id}
                     amountPaise={tenant.monthly_rent_paise}
                     propertyId={activePropertyId!}
+                    hasUnpaidDue={hasUnpaidDue}
                   />
                   {latestDue && latestDue.status !== 'paid' && (
                     <AddFineDialog dueId={latestDue.id} propertyId={activePropertyId!} />
