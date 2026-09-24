@@ -309,7 +309,7 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
-          room_id: string
+          room_unit_id: string
           total_amount_paise: number
           updated_at: string
         }
@@ -318,7 +318,7 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
-          room_id: string
+          room_unit_id: string
           total_amount_paise: number
           updated_at?: string
         }
@@ -327,7 +327,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
-          room_id?: string
+          room_unit_id?: string
           total_amount_paise?: number
           updated_at?: string
         }
@@ -340,10 +340,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "electricity_bills_room_id_fkey"
-            columns: ["room_id"]
+            foreignKeyName: "electricity_bills_room_unit_id_fkey"
+            columns: ["room_unit_id"]
             isOneToOne: false
-            referencedRelation: "rooms"
+            referencedRelation: "room_units"
             referencedColumns: ["id"]
           },
         ]
@@ -606,10 +606,41 @@ export type Database = {
         }
         Relationships: []
       }
+      room_units: {
+        Row: {
+          capacity: number
+          created_at: string
+          id: string
+          room_id: string
+          updated_at: string
+        }
+        Insert: {
+          capacity: number
+          created_at?: string
+          id?: string
+          room_id: string
+          updated_at?: string
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          id?: string
+          room_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_units_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           block_id: string | null
-          capacity: number
           created_at: string
           id: string
           property_id: string
@@ -618,7 +649,6 @@ export type Database = {
         }
         Insert: {
           block_id?: string | null
-          capacity: number
           created_at?: string
           id?: string
           property_id: string
@@ -627,7 +657,6 @@ export type Database = {
         }
         Update: {
           block_id?: string | null
-          capacity?: number
           created_at?: string
           id?: string
           property_id?: string
@@ -665,7 +694,7 @@ export type Database = {
           move_out_date: string | null
           phone: string
           property_id: string
-          room_id: string
+          room_unit_id: string
           status: Database["public"]["Enums"]["tenant_status"]
           updated_at: string
         }
@@ -682,7 +711,7 @@ export type Database = {
           move_out_date?: string | null
           phone: string
           property_id: string
-          room_id: string
+          room_unit_id: string
           status?: Database["public"]["Enums"]["tenant_status"]
           updated_at?: string
         }
@@ -699,7 +728,7 @@ export type Database = {
           move_out_date?: string | null
           phone?: string
           property_id?: string
-          room_id?: string
+          room_unit_id?: string
           status?: Database["public"]["Enums"]["tenant_status"]
           updated_at?: string
         }
@@ -712,10 +741,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tenants_room_id_fkey"
-            columns: ["room_id"]
+            foreignKeyName: "tenants_room_unit_id_fkey"
+            columns: ["room_unit_id"]
             isOneToOne: false
-            referencedRelation: "rooms"
+            referencedRelation: "room_units"
             referencedColumns: ["id"]
           },
         ]

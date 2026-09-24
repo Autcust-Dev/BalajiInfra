@@ -57,12 +57,12 @@ select set_config('request.jwt.claims', json_build_object(
   'aud', 'balajiinfra-local-dev', 'iss', 'https://securetoken.google.com/balajiinfra-local-dev'
 )::text, true);
 select lives_ok(
-  $$ update public.rooms set capacity = 99 where id = '44444444-4444-4444-4444-444444444444' $$,
+  $$ update public.rooms set room_number = '999' where id = '44444444-4444-4444-4444-444444444444' $$,
   'approved tenant''s update against their own room runs without error (RLS filters it to 0 rows)'
 );
 select isnt(
-  (select capacity from public.rooms where id = '44444444-4444-4444-4444-444444444444'),
-  99,
+  (select room_number from public.rooms where id = '44444444-4444-4444-4444-444444444444'),
+  '999',
   'the tenant''s update against their own room was actually a no-op'
 );
 

@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sharingTypeLabel } from '@/lib/rooms'
 import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
@@ -22,7 +23,7 @@ function useBillDetail(billId: string) {
     queryFn: async () => {
       const { data: bill, error: billError } = await supabase
         .from('electricity_bills')
-        .select('*, rooms(room_number, properties(name))')
+        .select('*, room_units(capacity, rooms(room_number, properties(name)))')
         .eq('id', billId)
         .single()
       if (billError) throw billError
@@ -128,7 +129,8 @@ export function EBillDetailPage() {
       </Link>
       <div>
         <h1 className="text-foreground text-xl font-medium">
-          {bill.rooms?.properties?.name} · Room {bill.rooms?.room_number}
+          {bill.room_units?.rooms?.properties?.name} · Room {bill.room_units?.rooms?.room_number} ·{' '}
+          {bill.room_units ? sharingTypeLabel(bill.room_units.capacity) : ''}
         </h1>
         <p className="text-muted-foreground text-sm">
           {new Date(bill.billing_period).toLocaleDateString('en-IN', {

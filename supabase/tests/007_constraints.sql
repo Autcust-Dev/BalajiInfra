@@ -21,8 +21,8 @@ select throws_ok(
   'payments.amount_paise must be > 0'
 );
 select throws_ok(
-  $$ insert into public.tenants (property_id, room_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)
-     values ('33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444', 'Bad Phone', '9876500009', 'active', 'not_started', current_date, 500000) $$,
+  $$ insert into public.tenants (property_id, room_unit_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)
+     values ('33333333-3333-3333-3333-333333333333', 'b4444444-4444-4444-4444-444444444444', 'Bad Phone', '9876500009', 'active', 'not_started', current_date, 500000) $$,
   '23514',
   null,
   'tenants.phone must match +91 followed by 10 digits'

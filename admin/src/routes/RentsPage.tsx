@@ -40,6 +40,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth-context'
+import { sharingTypeLabel } from '@/lib/rooms'
 import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
@@ -61,14 +62,15 @@ function useRentsData(propertyId: string | undefined) {
     queryFn: async () => {
       const { data: tenants, error: tenantsError } = await supabase
         .from('tenants')
-        .select('id, full_name, monthly_rent_paise, billing_cycle, rooms(room_number)')
+        .select(
+          'id, full_name, monthly_rent_paise, billing_cycle, room_units(capacity, rooms(room_number))',
+        )
         .eq('property_id', propertyId!)
         .eq('status', 'active')
         .order('full_name')
       if (tenantsError) throw tenantsError
 
       const tenantIds = tenants.map((t) => t.id)
-      if (tenantIds.length === 0) return { tenants: [], duesByTenant: new Map() }
 
       const { data: dues, error: duesError } = await supabase
         .from('dues')
@@ -98,10 +100,12 @@ function AddRentDueButton({
   tenantId,
   amountPaise,
   propertyId,
+  hasUnpaidDue,
 }: {
   tenantId: string
   amountPaise: number
   propertyId: string
+  hasUnpaidDue: boolean
 }) {
   const queryClient = useQueryClient()
   const { adminProfile } = useAuth()
@@ -131,7 +135,13 @@ function AddRentDueButton({
   }
 
   return (
-    <Button size="sm" variant="outline" onClick={() => void addDue()} disabled={loading}>
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => void addDue()}
+      disabled={loading || hasUnpaidDue}
+      title={hasUnpaidDue ? 'This tenant already has an unpaid rent due' : undefined}
+    >
       Add rent due
     </Button>
   )
@@ -269,7 +279,7 @@ export function RentsPage() {
   const { data, isLoading } = useRentsData(activePropertyId)
 
   const tenants = data?.tenants ?? []
-  const duesByTenant = data?.duesByTenant ?? new Map()
+  const duesByTenant: NonNullable<typeof data>['duesByTenant'] = data?.duesByTenant ?? new Map()
 
   let totalExpected = 0
   let totalPending = 0
@@ -347,10 +357,14 @@ export function RentsPage() {
           {tenants.map((tenant) => {
             const dues = duesByTenant.get(tenant.id) ?? []
             const latestDue = dues[0]
+            const hasUnpaidDue = dues.some((d) => d.status === 'unpaid')
             return (
               <TableRow key={tenant.id}>
                 <TableCell>{tenant.full_name}</TableCell>
-                <TableCell className="text-muted-foreground">{tenant.rooms?.room_number}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {tenant.room_units?.rooms?.room_number}
+                  {tenant.room_units ? ` · ${sharingTypeLabel(tenant.room_units.capacity)}` : ''}
+                </TableCell>
                 <TableCell className="capitalize">{tenant.billing_cycle}</TableCell>
                 <TableCell>
                   ₹{paiseToRupees(tenant.monthly_rent_paise).toLocaleString('en-IN')}
@@ -370,6 +384,7 @@ export function RentsPage() {
                     tenantId={tenant.id}
                     amountPaise={tenant.monthly_rent_paise}
                     propertyId={activePropertyId!}
+                    hasUnpaidDue={hasUnpaidDue}
                   />
                   {latestDue && latestDue.status !== 'paid' && (
                     <AddFineDialog dueId={latestDue.id} propertyId={activePropertyId!} />
