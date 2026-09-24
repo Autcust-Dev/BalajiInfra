@@ -124,6 +124,41 @@ export type Database = {
         }
         Relationships: []
       }
+      blocks: {
+        Row: {
+          created_at: string
+          display_order: number
+          floor_id: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          floor_id: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          floor_id?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: false
+            referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consents: {
         Row: {
           accepted_at: string
@@ -218,6 +253,180 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      electricity_bill_splits: {
+        Row: {
+          bill_id: string
+          created_at: string
+          due_id: string
+          id: string
+          tenant_id: string
+        }
+        Insert: {
+          bill_id: string
+          created_at?: string
+          due_id: string
+          id?: string
+          tenant_id: string
+        }
+        Update: {
+          bill_id?: string
+          created_at?: string
+          due_id?: string
+          id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "electricity_bill_splits_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "electricity_bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "electricity_bill_splits_due_id_fkey"
+            columns: ["due_id"]
+            isOneToOne: true
+            referencedRelation: "dues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "electricity_bill_splits_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      electricity_bills: {
+        Row: {
+          billing_period: string
+          created_at: string
+          created_by: string
+          id: string
+          room_id: string
+          total_amount_paise: number
+          updated_at: string
+        }
+        Insert: {
+          billing_period: string
+          created_at?: string
+          created_by: string
+          id?: string
+          room_id: string
+          total_amount_paise: number
+          updated_at?: string
+        }
+        Update: {
+          billing_period?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          room_id?: string
+          total_amount_paise?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "electricity_bills_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "electricity_bills_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fines: {
+        Row: {
+          amount_paise: number
+          created_at: string
+          created_by: string
+          due_id: string
+          ends_on: string
+          id: string
+          starts_on: string
+          updated_at: string
+        }
+        Insert: {
+          amount_paise: number
+          created_at?: string
+          created_by: string
+          due_id: string
+          ends_on: string
+          id?: string
+          starts_on: string
+          updated_at?: string
+        }
+        Update: {
+          amount_paise?: number
+          created_at?: string
+          created_by?: string
+          due_id?: string
+          ends_on?: string
+          id?: string
+          starts_on?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fines_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fines_due_id_fkey"
+            columns: ["due_id"]
+            isOneToOne: false
+            referencedRelation: "dues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      floors: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          property_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          property_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          property_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floors_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]
@@ -399,6 +608,7 @@ export type Database = {
       }
       rooms: {
         Row: {
+          block_id: string | null
           capacity: number
           created_at: string
           id: string
@@ -407,6 +617,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          block_id?: string | null
           capacity: number
           created_at?: string
           id?: string
@@ -415,6 +626,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          block_id?: string | null
           capacity?: number
           created_at?: string
           id?: string
@@ -423,6 +635,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "rooms_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "blocks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rooms_property_id_fkey"
             columns: ["property_id"]
@@ -434,6 +653,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          billing_cycle: Database["public"]["Enums"]["billing_cycle"]
           created_at: string
           fcm_token: string | null
           firebase_uid: string | null
@@ -450,6 +670,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
           created_at?: string
           fcm_token?: string | null
           firebase_uid?: string | null
@@ -466,6 +687,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
           created_at?: string
           fcm_token?: string | null
           firebase_uid?: string | null
@@ -539,11 +761,16 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       is_tenant: { Args: never; Returns: boolean }
+      recalculate_electricity_bill_split: {
+        Args: { p_bill_id: string }
+        Returns: undefined
+      }
       tenant_can_access_main_app: { Args: never; Returns: boolean }
       tenant_is_active: { Args: never; Returns: boolean }
     }
     Enums: {
       admin_role: "owner" | "staff"
+      billing_cycle: "monthly" | "yearly"
       due_status: "unpaid" | "paid" | "cancelled"
       due_type: "rent" | "deposit" | "electricity" | "other"
       kyc_status: "not_started" | "submitted" | "approved" | "rejected"
@@ -681,6 +908,7 @@ export const Constants = {
   public: {
     Enums: {
       admin_role: ["owner", "staff"],
+      billing_cycle: ["monthly", "yearly"],
       due_status: ["unpaid", "paid", "cancelled"],
       due_type: ["rent", "deposit", "electricity", "other"],
       kyc_status: ["not_started", "submitted", "approved", "rejected"],

@@ -1,4 +1,4 @@
-import { Building2, LogOut, Users } from 'lucide-react'
+import { Building2, LogOut, Receipt, ShieldCheck, Users, Zap } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useIdleTimeout } from '@/hooks/useIdleTimeout'
@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils'
 const navItems = [
   { to: '/properties', label: 'Properties', icon: Building2 },
   { to: '/tenants', label: 'Tenants', icon: Users },
+  { to: '/kyc', label: 'KYC', icon: ShieldCheck },
+  { to: '/ebills', label: 'E-Bills', icon: Zap },
+  { to: '/rents', label: 'Rents', icon: Receipt },
 ]
 
 export function AppShell() {
