@@ -775,6 +775,7 @@ export type Database = {
       properties: {
         Row: {
           address: string
+          code: string | null
           created_at: string
           id: string
           name: string
@@ -783,6 +784,7 @@ export type Database = {
         }
         Insert: {
           address: string
+          code?: string | null
           created_at?: string
           id?: string
           name: string
@@ -791,6 +793,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          code?: string | null
           created_at?: string
           id?: string
           name?: string
@@ -873,6 +876,32 @@ export type Database = {
           },
         ]
       }
+      tenant_code_sequences: {
+        Row: {
+          next_sequence: number
+          property_id: string
+          year: number
+        }
+        Insert: {
+          next_sequence?: number
+          property_id: string
+          year: number
+        }
+        Update: {
+          next_sequence?: number
+          property_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_code_sequences_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           bed_id: string | null
@@ -890,6 +919,7 @@ export type Database = {
           property_id: string
           room_unit_id: string
           status: Database["public"]["Enums"]["tenant_status"]
+          tenant_code: string | null
           updated_at: string
         }
         Insert: {
@@ -908,6 +938,7 @@ export type Database = {
           property_id: string
           room_unit_id: string
           status?: Database["public"]["Enums"]["tenant_status"]
+          tenant_code?: string | null
           updated_at?: string
         }
         Update: {
@@ -926,6 +957,7 @@ export type Database = {
           property_id?: string
           room_unit_id?: string
           status?: Database["public"]["Enums"]["tenant_status"]
+          tenant_code?: string | null
           updated_at?: string
         }
         Relationships: [

@@ -260,7 +260,10 @@ Never invent method names, config keys, or claims.
 Create in migration order; adjust names only with good reason and update this file.
 
 - `admins` — user_id (→ auth.users), name, role (`owner | staff`), active.
-- `properties` — name, address, self_signup_enabled (per-property opt-in for self-signup).
+- `properties` — name, address, code (2 uppercase letters, auto-generated from the name
+  on insert, unique, admin-editable if the generated one collides or an admin just wants
+  to change it — a later change only affects tenant_codes assigned from then on, never
+  rewrites already-issued ones), self_signup_enabled (per-property opt-in for self-signup).
 - `floors` — property_id, name, display_order.
 - `blocks` — floor_id, name, display_order.
 - `rooms` — property_id, room_number, block_id (nullable). A pure location shell — sharing
@@ -276,19 +279,36 @@ Create in migration order; adjust names only with good reason and update this fi
   available) is computed live by `bed_is_available(bed_id)`, the single canonical
   availability function every caller (admin panel, Edge Functions, pgTAP) uses rather
   than re-implementing the same logic — never a denormalized status flag that could drift.
-- `tenants` — property_id, room_unit_id, bed_id (nullable — see note), full_name, phone
-  (E.164, unique), firebase_uid (nullable, unique, set on first login — or set immediately
-  at creation for a self-registered tenant, since their phone was already OTP-verified
-  pre-payment), status (`active | moved_out`), kyc_status (enum), move_in_date,
-  move_out_date, monthly_rent_paise, billing_cycle (`monthly | yearly`), fcm_token. At
-  most one active tenant per bed, enforced by a partial unique index on bed_id, and
-  bed_id must belong to the tenant's own room_unit_id, enforced by trigger. `bed_id` is
-  nullable because it was added after tenants already existed: a migration backfilled it
-  for every existing active tenant where a clean 1:1 room_unit→bed assignment was
-  possible, but any tenant in a room_unit an admin had already put over capacity (via the
-  tenant form's capacity-override warning) couldn't be assigned one and needs a manual
-  admin fix — the tenant form must surface "no bed assigned" for these. Going forward,
-  both the tenant form and the self-signup webhook are expected to always set it.
+- `tenants` — property_id, room_unit_id, bed_id (nullable — see note), tenant_code
+  (nullable — see note), full_name, phone (E.164, unique), firebase_uid (nullable, unique,
+  set on first login — or set immediately at creation for a self-registered tenant, since
+  their phone was already OTP-verified pre-payment), status (`active | moved_out`),
+  kyc_status (enum), move_in_date, move_out_date, monthly_rent_paise, billing_cycle
+  (`monthly | yearly`), fcm_token. At most one active tenant per bed, enforced by a
+  partial unique index on bed_id, and bed_id must belong to the tenant's own
+  room_unit_id, enforced by trigger. `bed_id` is nullable because it was added after
+  tenants already existed: a migration backfilled it for every existing active tenant
+  where a clean 1:1 room_unit→bed assignment was possible, but any tenant in a room_unit
+  an admin had already put over capacity (via the tenant form's capacity-override
+  warning) couldn't be assigned one and needs a manual admin fix — the tenant form must
+  surface "no bed assigned" for these. Going forward, both the tenant form and the
+  self-signup webhook are expected to always set it.
+
+  `tenant_code` is the human-readable id (`<PROPERTY_CODE>-<FULL_YEAR>-<SEQUENCE>`, e.g.
+  `SE-2026-0001` — the full 4-digit year is stored, not a 2-digit shorthand, so it never
+  collides or breaks after 2099; a shorter display form, if ever wanted on an invoice
+  template, is that screen's own rendering choice, not a second stored value),
+  unique, shown to the tenant in the app and searchable/printed in the admin panel.
+  Assigned automatically by a `before insert` trigger via `tenant_code_sequences`
+  (property_id, year, next_sequence) — a dedicated counter table whose row-locked UPSERT
+  is what actually guarantees "assigned by the database, never reused, race-safe between
+  an admin insert and a self-signup webhook," not application-level retry logic.
+  Deliberately excludes floor/room/sharing type — a tenant's room can change, and an id
+  encoding it would go stale or force reissuing; the current room is shown next to the id
+  in the UI instead. `tenant_code` is nullable for the same reason `bed_id` is: a
+  property whose auto-generated code collided and was never manually fixed can't be
+  backfilled, and creating a *new* tenant for such a property fails closed (the trigger
+  raises rather than creating one with no code) instead of silently leaving a gap.
 - `consents` — tenant_id, policy_version, typed_full_name, accepted_at, app_version,
   device_info.
 - `kyc_submissions` — tenant_id, status, aadhaar_last4, aadhaar_path, selfie_path,
