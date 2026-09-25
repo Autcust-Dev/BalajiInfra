@@ -253,6 +253,19 @@ Never invent method names, config keys, or claims.
 31. Before sending an OTP, call Edge Function `check-phone` (rate-limited per IP and
     per phone). Response is only `{ allowed: boolean }`. Never reveal tenant details.
 
+### Deferred (post-launch, not forgotten)
+- **Forward-dated availability**: letting a bed be booked for a date after an existing
+  tenant's *scheduled* (not yet actual) move-out, so a new tenant can be lined up before
+  the room is physically empty. Explicitly deferred — agreed post-launch, not before.
+  What it would take when the time comes: bed occupancy today is a flat "occupied now or
+  not," not an interval — this needs a real `scheduled_move_out_date` distinct from the
+  actual `move_out_date` (tenant stays `active` until the real event), `bed_is_available()`
+  becoming date-parameterized with interval-overlap logic instead of a snapshot boolean,
+  bookings/holds carrying a target move-in date, a seat-map UX for "available from
+  `<date>`," and a product decision on what happens if the current tenant doesn't actually
+  leave on time. Additive on top of what's built for launch — nothing already shipped
+  needs reworking to add this later.
+
 ---
 
 ## 5. Core data model (initial)
