@@ -384,24 +384,68 @@ where t.id = rt.id;
 
 -- ---------------------------------------------------------------------------------------
 -- The one canonical availability computation — a bed is selectable in the app's seat map
--- iff none of: under maintenance, occupied by an active tenant, or held by a live
--- (unexpired) booking. PR2's list-availability Edge Function calls this rather than
--- re-implementing the same logic; its response only ever carries a bed label and this
--- boolean — never an occupant's name or any other tenant detail (there is none to leak:
--- this function returns a single boolean, nothing else).
+-- iff none of: under maintenance, occupied by an active tenant, held by a live
+-- (unexpired) booking, or its whole room_unit already at capacity once tenants with no
+-- bed_id are counted (see below). PR2's list-availability Edge Function calls this rather
+-- than re-implementing the same logic; its response only ever carries a bed label and
+-- this boolean — never an occupant's name or any other tenant detail (there is none to
+-- leak: this function returns a single boolean, nothing else).
+--
+-- The room_unit-level headcount check exists specifically because tenants.bed_id can be
+-- null (see the comment on that column): a tenant with no bed_id is real and occupies a
+-- real bed in their room_unit, but bed-level checks alone can't tell WHICH one — so
+-- without this, every bed in that room_unit would look free even though one of them
+-- genuinely isn't, and self-signup could sell a bed that's actually occupied. Counting
+-- heads against capacity closes that gap: once a room_unit's active-tenant-plus-live-hold
+-- count reaches its capacity, none of its beds are offered, even ones with no specific
+-- occupant recorded against them. This is intentionally conservative (it may block a
+-- technically-free bed in a room that also has an unassigned tenant) rather than risk
+-- double-booking one that's actually taken.
 create or replace function public.bed_is_available(p_bed_id uuid)
 returns boolean
-language sql
+language plpgsql
 security definer
 stable
 set search_path = ''
 as $$
-  select not exists (select 1 from public.beds where id = p_bed_id and under_maintenance)
-    and not exists (select 1 from public.tenants where bed_id = p_bed_id and status = 'active')
-    and not exists (
-      select 1 from public.bookings
-      where bed_id = p_bed_id
-        and status in ('hold', 'otp_verified', 'payment_pending')
-        and held_expires_at > now()
-    );
+declare
+  v_room_unit_id uuid;
+  v_capacity integer;
+  v_under_maintenance boolean;
+  v_occupied_count integer;
+begin
+  select b.room_unit_id, b.under_maintenance, ru.capacity
+  into v_room_unit_id, v_under_maintenance, v_capacity
+  from public.beds b
+  join public.room_units ru on ru.id = b.room_unit_id
+  where b.id = p_bed_id;
+
+  if v_room_unit_id is null or v_under_maintenance then
+    return false;
+  end if;
+
+  if exists (select 1 from public.tenants where bed_id = p_bed_id and status = 'active') then
+    return false;
+  end if;
+
+  if exists (
+    select 1 from public.bookings
+    where bed_id = p_bed_id
+      and status in ('hold', 'otp_verified', 'payment_pending')
+      and held_expires_at > now()
+  ) then
+    return false;
+  end if;
+
+  select
+    (select count(*) from public.tenants where room_unit_id = v_room_unit_id and status = 'active')
+    + (select count(*) from public.bookings bk
+         join public.beds bd on bd.id = bk.bed_id
+         where bd.room_unit_id = v_room_unit_id
+           and bk.status in ('hold', 'otp_verified', 'payment_pending')
+           and bk.held_expires_at > now())
+  into v_occupied_count;
+
+  return v_occupied_count < v_capacity;
+end;
 $$;

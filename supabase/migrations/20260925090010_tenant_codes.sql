@@ -38,8 +38,13 @@ begin
   end if;
 
   -- Only claim it if it's a clean two-letter code and nobody else has it yet. Otherwise
-  -- leave code null — an admin must set it by hand (CLAUDE.md rule addition below), and
-  -- assign_tenant_code() fails closed rather than creating a tenant with no code.
+  -- leave code null — an admin must set it by hand. This is expected to be common (e.g.
+  -- "Balaji Executive" and "Balaji Elite" both generate BE), which is exactly why PR4's
+  -- admin panel must require a code at property-creation time, suggest the
+  -- auto-generated one, and reject a duplicate with a clear message, rather than leaving
+  -- admins to discover a null code later. assign_tenant_code() below never blocks tenant
+  -- creation over a missing code (it just leaves tenant_code null), so this collision
+  -- being common is an admin-UX annoyance to fix in PR4, not a correctness risk.
   if v_candidate ~ '^[A-Z]{2}$' and not exists (select 1 from public.properties where code = v_candidate) then
     new.code := v_candidate;
   end if;
@@ -117,9 +122,13 @@ begin
 
   select code into v_property_code from public.properties where id = new.property_id;
   if v_property_code is null then
-    raise exception
-      'tenants: property % has no code set — an admin must set properties.code before a tenant can be created for it',
-      new.property_id;
+    -- A missing property code must NEVER block tenant creation — most importantly, a
+    -- self-signup tenant who has already paid cannot fail to become a tenant for a
+    -- reason that has nothing to do with them. Leave tenant_code null and move on; PR4
+    -- surfaces "no tenant_code" to admins the same way it surfaces "no bed_id", and
+    -- fixing the property's code afterward does not retroactively backfill this tenant —
+    -- reissuing one, if ever wanted, is a deliberate manual admin action.
+    return new;
   end if;
 
   insert into public.tenant_code_sequences (property_id, year, next_sequence)

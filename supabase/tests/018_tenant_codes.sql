@@ -1,5 +1,5 @@
 begin;
-select plan(12);
+select plan(13);
 
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object(
@@ -39,15 +39,20 @@ select is(
   'an admin can manually resolve a property code collision'
 );
 
--- A tenant cannot be created for a property with no code (fail-closed).
+-- A missing property code must NEVER block tenant creation (a self-signup tenant who
+-- already paid cannot fail to become a tenant over something unrelated to them) — the
+-- tenant is created successfully, just with tenant_code left null.
 insert into public.properties (id, name, address) values
   ('d0000003-0000-0000-0000-000000000003', 'Fake PG Pune', '3 Fake Rd'); -- also collides with FP, left null
-select throws_ok(
+select lives_ok(
   $$ insert into public.tenants (property_id, room_unit_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)
      values ('d0000003-0000-0000-0000-000000000003', 'b4444444-4444-4444-4444-444444444444', 'No Code Tenant', '+919876511100', 'active', 'not_started', current_date, 500000) $$,
-  'P0001',
+  'tenant creation succeeds even when the property has no code set'
+);
+select is(
+  (select tenant_code from public.tenants where full_name = 'No Code Tenant'),
   null,
-  'a tenant cannot be created for a property with no code set'
+  'the tenant created for a codeless property has tenant_code left null, not a placeholder'
 );
 
 -- Fresh tenant_code assignment and format.

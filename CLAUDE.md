@@ -307,8 +307,15 @@ Create in migration order; adjust names only with good reason and update this fi
   encoding it would go stale or force reissuing; the current room is shown next to the id
   in the UI instead. `tenant_code` is nullable for the same reason `bed_id` is: a
   property whose auto-generated code collided and was never manually fixed can't be
-  backfilled, and creating a *new* tenant for such a property fails closed (the trigger
-  raises rather than creating one with no code) instead of silently leaving a gap.
+  backfilled — but unlike `bed_id`, a missing code must **never** block creating the
+  tenant (most importantly: a self-signup tenant who already paid cannot fail to become
+  a tenant over something unrelated to them), so the trigger just leaves `tenant_code`
+  null rather than raising. Both this and a missing `bed_id` are surfaced to admins the
+  same way (PR4). Property-code collisions are expected to be common (e.g. "Balaji
+  Executive" / "Balaji Elite" both generate `BE`) — **PR4 must make the admin property
+  form require a code at creation time**, suggesting the auto-generated one and
+  rejecting a duplicate with a clear message, rather than leaving this to be discovered
+  as a silent null later.
 - `consents` — tenant_id, policy_version, typed_full_name, accepted_at, app_version,
   device_info.
 - `kyc_submissions` — tenant_id, status, aadhaar_last4, aadhaar_path, selfie_path,

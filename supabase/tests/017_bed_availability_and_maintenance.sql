@@ -1,5 +1,5 @@
 begin;
-select plan(11);
+select plan(14);
 
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object(
@@ -118,6 +118,39 @@ select ok(
     (select id from public.beds where room_unit_id = 'be000000-0000-0000-0000-000000000000' and bed_label = 'Bed 2')
   ),
   'a bed with only an expired hold is available again (lazy expiry)'
+);
+
+-- The room_unit-level headcount safety net for tenants with no bed_id (see the comment on
+-- bed_is_available()): b5555555 has capacity 2, with one active tenant properly on Bed 1
+-- and Bed 2 genuinely free — baseline is available.
+select ok(
+  public.bed_is_available(
+    (select id from public.beds where room_unit_id = 'b5555555-5555-5555-5555-555555555555' and bed_label = 'Bed 2')
+  ),
+  'baseline: an unoccupied bed in a room with one (of two) active tenants is available'
+);
+
+-- A second active tenant with no bed_id fills the room to capacity without pointing at
+-- any specific bed.
+insert into public.tenants (property_id, room_unit_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)
+values ('33333333-3333-3333-3333-333333333333', 'b5555555-5555-5555-5555-555555555555', 'Untracked Occupant', '+919876555555', 'active', 'not_started', current_date, 1000000);
+
+select ok(
+  not public.bed_is_available(
+    (select id from public.beds where room_unit_id = 'b5555555-5555-5555-5555-555555555555' and bed_label = 'Bed 2')
+  ),
+  'an untracked (bed_id null) active tenant fills the room to capacity, so its other bed is no longer offered even though nothing points at it directly'
+);
+
+-- The headcount check is scoped per room_unit — an unrelated, genuinely free bed
+-- elsewhere is unaffected (be000000's Bed 1 is under maintenance from earlier in this
+-- file, so Bed 2 — freed a moment ago by the expired-hold check above — is the clean one
+-- to use here).
+select ok(
+  public.bed_is_available(
+    (select id from public.beds where room_unit_id = 'be000000-0000-0000-0000-000000000000' and bed_label = 'Bed 2')
+  ),
+  'a free bed in an unrelated room_unit is unaffected by another room''s untracked occupant'
 );
 
 select * from finish();
