@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth-context'
 import { sharingTypeLabel } from '@/lib/rooms'
-import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
+import { formatPaise, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
 function usePropertiesQuery() {
@@ -317,15 +317,11 @@ export function RentsPage() {
           </div>
           <div className="rounded-md border p-4">
             <p className="text-muted-foreground text-xs">Monthly rent expected</p>
-            <p className="text-lg font-medium">
-              ₹{paiseToRupees(totalExpected).toLocaleString('en-IN')}
-            </p>
+            <p className="text-lg font-medium">₹{formatPaise(totalExpected)}</p>
           </div>
           <div className="rounded-md border p-4">
             <p className="text-muted-foreground text-xs">Pending (unpaid dues + fines)</p>
-            <p className="text-lg font-medium">
-              ₹{paiseToRupees(totalPending).toLocaleString('en-IN')}
-            </p>
+            <p className="text-lg font-medium">₹{formatPaise(totalPending)}</p>
           </div>
         </div>
       )}
@@ -366,14 +362,11 @@ export function RentsPage() {
                   {tenant.room_units ? ` · ${sharingTypeLabel(tenant.room_units.capacity)}` : ''}
                 </TableCell>
                 <TableCell className="capitalize">{tenant.billing_cycle}</TableCell>
-                <TableCell>
-                  ₹{paiseToRupees(tenant.monthly_rent_paise).toLocaleString('en-IN')}
-                </TableCell>
+                <TableCell>₹{formatPaise(tenant.monthly_rent_paise)}</TableCell>
                 <TableCell>
                   {latestDue ? (
                     <Badge variant={latestDue.status === 'paid' ? 'secondary' : 'outline'}>
-                      ₹{paiseToRupees(dueTotal(latestDue)).toLocaleString('en-IN')} ·{' '}
-                      {latestDue.status}
+                      ₹{formatPaise(dueTotal(latestDue))} · {latestDue.status}
                     </Badge>
                   ) : (
                     <span className="text-muted-foreground text-sm">No dues yet</span>

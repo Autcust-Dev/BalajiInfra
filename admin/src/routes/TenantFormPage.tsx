@@ -34,7 +34,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { sharingTypeLabel } from '@/lib/rooms'
-import { phoneSchema, rupeesSchema, paiseToRupees, rupeesToPaise } from '@/lib/validators'
+import {
+  phoneSchema,
+  rupeesSchema,
+  formatPaise,
+  paiseToRupees,
+  rupeesToPaise,
+} from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
 const tenantFormSchema = z.object({
@@ -175,8 +181,7 @@ function MoveOutDialog({ tenantId, tenantName }: { tenantId: string; tenantName:
             own tenant record anymore. This can't be undone from the app.
             {!!unpaidTotal && unpaidTotal > 0 && (
               <span className="text-destructive mt-2 block font-medium">
-                This tenant has ₹{paiseToRupees(unpaidTotal).toLocaleString('en-IN')} unpaid — move
-                out anyway?
+                This tenant has ₹{formatPaise(unpaidTotal)} unpaid — move out anyway?
               </span>
             )}
           </AlertDialogDescription>
