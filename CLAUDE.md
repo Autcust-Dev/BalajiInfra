@@ -16,8 +16,16 @@ A hostel / PG management product for India, with three parts:
 
 Core rules of the product:
 
-1. Tenants **cannot self-register**. An admin adds the tenant (name, phone, room, rent)
-   first. Only phone numbers that exist in the `tenants` table can log in.
+1. Tenants are created one of two ways, never any other: **(a) an admin adds them**
+   directly (name, phone, room, rent), or **(b) they self-register** through the app's
+   sign-up flow (property → floor → sharing type → available room/bed → pricing →
+   phone OTP → Razorpay payment) — but even then, the `tenants` row is created **only**
+   by the payment webhook (or an admin completing a booking with a manual payment)
+   on confirmed payment, never by client-side success or any other insert path. A
+   self-registered tenant is identical in the database to an admin-added one — same
+   columns, same triggers, same downstream rules. Before payment, a signup attempt is
+   a `bookings` row, not a tenant, and no phone can log in until a `tenants` row for
+   it exists (rule 2 is unchanged).
 2. Login = phone number → OTP (Firebase Phone Auth) → session.
 3. After first login, **KYC is mandatory** before any other screen:
    privacy-policy consent + typed full name (as on Aadhaar) → masked Aadhaar upload →
@@ -210,10 +218,20 @@ Never invent method names, config keys, or claims.
     info. Checkbox is **never pre-ticked**. Consent row must exist before any upload.
 22. Never log personal data (names, phones, images, tokens) to console, Sentry, or
     Crashlytics.
+22a. **Abandoned bookings** (self-signup attempts that never became a tenant — expired,
+    cancelled, or failed) are auto-deleted after `app_config.booking_pii_retention_days`
+    (default 90, admin-configurable) by a scheduled job
+    (`public.delete_abandoned_bookings()`, pg_cron). A booking with `created_tenant_id`
+    set, or with status `paid`/`refunded`, is a financial record and is **never**
+    auto-deleted, enforced in the delete job's own `WHERE` clause, not by convention.
 
 ### Payments
-23. The **amount is always computed server-side** from the `dues` row. The client
-    only sends the due id.
+23. The **amount is always computed server-side** — from the `dues` row for an existing
+    tenant's payment, or from the `bookings` row's own snapshotted total for a signup
+    payment (itself copied from `pricing_plans` at hold time, so a later price edit never
+    changes an in-flight or completed booking). The client only ever sends an id, never
+    an amount. The webhook re-verifies the amount actually paid against that
+    server-held total before creating anything — a mismatch is rejected, not adjusted.
 24. Flow: app → Edge Function `create-order` → Razorpay order → Razorpay checkout in
     app → Edge Function `razorpay-webhook` marks the payment paid.
     The webhook is the source of truth; the client-side success callback only shows UI.
@@ -242,24 +260,60 @@ Never invent method names, config keys, or claims.
 Create in migration order; adjust names only with good reason and update this file.
 
 - `admins` — user_id (→ auth.users), name, role (`owner | staff`), active.
-- `properties` — name, address (support multiple hostels from day one).
-- `rooms` — property_id, room_number, capacity.
-- `tenants` — property_id, room_id, full_name, phone (E.164, unique), firebase_uid
-  (nullable, unique, set on first login), status (`active | moved_out`),
-  kyc_status (enum), move_in_date, monthly_rent_paise, fcm_token.
+- `properties` — name, address, self_signup_enabled (per-property opt-in for self-signup).
+- `floors` — property_id, name, display_order.
+- `blocks` — floor_id, name, display_order.
+- `rooms` — property_id, room_number, block_id (nullable). A pure location shell — sharing
+  type and capacity live one level down, on `room_units`.
+- `room_units` — room_id, capacity. A room may have up to one unit each of single/double/
+  triple (etc.) sharing; each unit is its own occupancy group and its own electricity-bill
+  split, independent of whatever other units exist in the same room.
+- `beds` — room_unit_id, bed_label. One row per unit of capacity, auto-provisioned when a
+  room_unit is created. Used only to pin a self-signup hold to a specific physical slot
+  (see `bookings` below) — no stored status; availability is always computed live from
+  `bookings`/`tenants`, never a denormalized flag.
+- `tenants` — property_id, room_unit_id, full_name, phone (E.164, unique), firebase_uid
+  (nullable, unique, set on first login — or set immediately at creation for a
+  self-registered tenant, since their phone was already OTP-verified pre-payment),
+  status (`active | moved_out`), kyc_status (enum), move_in_date, move_out_date,
+  monthly_rent_paise, billing_cycle (`monthly | yearly`), fcm_token.
 - `consents` — tenant_id, policy_version, typed_full_name, accepted_at, app_version,
   device_info.
 - `kyc_submissions` — tenant_id, status, aadhaar_last4, aadhaar_path, selfie_path,
   submitted_at, reviewed_by (→ admins), reviewed_at, rejection_reason.
-  `tenants.kyc_status` kept in sync by trigger.
+  `tenants.kyc_status` kept in sync by trigger (including on delete/resubmission).
 - `dues` — tenant_id, type (`rent | deposit | electricity | other`), description,
   amount_paise, due_date, status (`unpaid | paid | cancelled`), created_by.
+- `fines` — due_id, amount_paise, starts_on, ends_on, created_by. A flat admin-entered
+  amount, not a calculated rate; a due's true total is `dues.amount_paise + sum(fines)`.
+- `electricity_bills` — room_unit_id, billing_period, total_amount_paise, created_by. One
+  per unit per month; auto-split across that unit's active tenants (frozen once paid or on
+  move-out) into `electricity_bill_splits` (bill_id, tenant_id, due_id — pure junction, no
+  duplicated amount).
 - `payments` — due_id, tenant_id, amount_paise, source (`razorpay | manual`),
   status (`created | paid | failed | refunded`), razorpay_order_id (unique),
   razorpay_payment_id (unique), method, paid_at, recorded_by.
+- `pricing_plans` — property_id, capacity (sharing type), security_deposit_paise,
+  rent_monthly_paise, rent_yearly_paise, onboarding_charges_paise, active.
+  Admin-editable; a booking snapshots these onto itself at hold time so a later edit
+  never changes an in-flight or completed booking.
+- `bookings` — the pre-tenant self-signup lifecycle (property_id, room_unit_id, bed_id,
+  full_name, phone, status (`hold | otp_verified | payment_pending | paid |
+  payment_failed | expired | cancelled | refunded`), billing_cycle, snapshotted pricing,
+  held_expires_at, razorpay_order_id/payment_id, source (`self_signup | manual`),
+  created_tenant_id, recorded_by). At most one active (`hold|otp_verified|
+  payment_pending`) booking per bed and per phone, enforced by a partial unique index —
+  the actual double-booking guard, not application logic. The `tenants` row is created
+  only when a booking reaches `paid` (rule 1). No anon/authenticated access — reached only
+  through service_role Edge Functions (and directly by admins, for the Bookings/Leads
+  page and manual-payment completion).
+- `whatsapp_invoice_log` — booking_id, status (`pending | sent | failed`),
+  provider_message_id, error_message. Fire-and-forget from the payment webhook; the in-app
+  invoice is the source of truth regardless of WhatsApp delivery.
 - `webhook_events` — provider, event_id (unique), payload, processed_at.
 - `audit_log` — actor_type, actor_id, action, table_name, row_id, before, after, at.
-- `app_config` — key/value (min_app_version, current policy_version, etc.).
+- `app_config` — key/value (min_app_version, current policy_version,
+  booking_pii_retention_days, etc.).
 
 ---
 

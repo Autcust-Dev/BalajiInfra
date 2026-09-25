@@ -124,6 +124,38 @@ export type Database = {
         }
         Relationships: []
       }
+      beds: {
+        Row: {
+          bed_label: string
+          created_at: string
+          id: string
+          room_unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          bed_label: string
+          created_at?: string
+          id?: string
+          room_unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          bed_label?: string
+          created_at?: string
+          id?: string
+          room_unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beds_room_unit_id_fkey"
+            columns: ["room_unit_id"]
+            isOneToOne: false
+            referencedRelation: "room_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blocks: {
         Row: {
           created_at: string
@@ -155,6 +187,114 @@ export type Database = {
             columns: ["floor_id"]
             isOneToOne: false
             referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bookings: {
+        Row: {
+          bed_id: string
+          billing_cycle: Database["public"]["Enums"]["billing_cycle"]
+          created_at: string
+          created_tenant_id: string | null
+          full_name: string | null
+          held_expires_at: string
+          id: string
+          onboarding_charges_paise: number
+          otp_verified_at: string | null
+          phone: string
+          property_id: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          recorded_by: string | null
+          rent_paise: number
+          room_unit_id: string
+          security_deposit_paise: number
+          source: string
+          status: Database["public"]["Enums"]["booking_status"]
+          total_amount_paise: number
+          updated_at: string
+        }
+        Insert: {
+          bed_id: string
+          billing_cycle: Database["public"]["Enums"]["billing_cycle"]
+          created_at?: string
+          created_tenant_id?: string | null
+          full_name?: string | null
+          held_expires_at: string
+          id?: string
+          onboarding_charges_paise: number
+          otp_verified_at?: string | null
+          phone: string
+          property_id: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          recorded_by?: string | null
+          rent_paise: number
+          room_unit_id: string
+          security_deposit_paise: number
+          source?: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          total_amount_paise: number
+          updated_at?: string
+        }
+        Update: {
+          bed_id?: string
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          created_at?: string
+          created_tenant_id?: string | null
+          full_name?: string | null
+          held_expires_at?: string
+          id?: string
+          onboarding_charges_paise?: number
+          otp_verified_at?: string | null
+          phone?: string
+          property_id?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          recorded_by?: string | null
+          rent_paise?: number
+          room_unit_id?: string
+          security_deposit_paise?: number
+          source?: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          total_amount_paise?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_bed_id_fkey"
+            columns: ["bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_created_tenant_id_fkey"
+            columns: ["created_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_room_unit_id_fkey"
+            columns: ["room_unit_id"]
+            isOneToOne: false
+            referencedRelation: "room_units"
             referencedColumns: ["id"]
           },
         ]
@@ -582,12 +722,60 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_plans: {
+        Row: {
+          active: boolean
+          capacity: number
+          created_at: string
+          id: string
+          onboarding_charges_paise: number
+          property_id: string
+          rent_monthly_paise: number
+          rent_yearly_paise: number
+          security_deposit_paise: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          capacity: number
+          created_at?: string
+          id?: string
+          onboarding_charges_paise: number
+          property_id: string
+          rent_monthly_paise: number
+          rent_yearly_paise: number
+          security_deposit_paise: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          capacity?: number
+          created_at?: string
+          id?: string
+          onboarding_charges_paise?: number
+          property_id?: string
+          rent_monthly_paise?: number
+          rent_yearly_paise?: number
+          security_deposit_paise?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_plans_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       properties: {
         Row: {
           address: string
           created_at: string
           id: string
           name: string
+          self_signup_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -595,6 +783,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          self_signup_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -602,6 +791,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          self_signup_enabled?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -779,6 +969,47 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_invoice_log: {
+        Row: {
+          attempted_at: string
+          booking_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          provider_message_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempted_at?: string
+          booking_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempted_at?: string
+          booking_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_invoice_log_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -787,6 +1018,7 @@ export type Database = {
       _firebase_project_id: { Args: never; Returns: string }
       _jwt_sub_as_uuid: { Args: never; Returns: string }
       current_tenant_id: { Args: never; Returns: string }
+      delete_abandoned_bookings: { Args: never; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       is_tenant: { Args: never; Returns: boolean }
@@ -800,6 +1032,15 @@ export type Database = {
     Enums: {
       admin_role: "owner" | "staff"
       billing_cycle: "monthly" | "yearly"
+      booking_status:
+        | "hold"
+        | "otp_verified"
+        | "payment_pending"
+        | "paid"
+        | "payment_failed"
+        | "expired"
+        | "cancelled"
+        | "refunded"
       due_status: "unpaid" | "paid" | "cancelled"
       due_type: "rent" | "deposit" | "electricity" | "other"
       kyc_status: "not_started" | "submitted" | "approved" | "rejected"
@@ -938,6 +1179,16 @@ export const Constants = {
     Enums: {
       admin_role: ["owner", "staff"],
       billing_cycle: ["monthly", "yearly"],
+      booking_status: [
+        "hold",
+        "otp_verified",
+        "payment_pending",
+        "paid",
+        "payment_failed",
+        "expired",
+        "cancelled",
+        "refunded",
+      ],
       due_status: ["unpaid", "paid", "cancelled"],
       due_type: ["rent", "deposit", "electricity", "other"],
       kyc_status: ["not_started", "submitted", "approved", "rejected"],
