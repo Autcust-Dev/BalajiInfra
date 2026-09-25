@@ -50,20 +50,30 @@ create trigger audit_log_row
 -- ---------------------------------------------------------------------------------------
 -- Beds: real rows so a hold can be pinned to a specific one (see the unique index on
 -- bookings below — that's the actual double-booking guard, not this table by itself).
--- Deliberately no status column: a bed's "is it free right now" answer is entirely a
--- function of live `bookings` rows (an active hold, or a paid booking whose tenant hasn't
--- moved out), never a separately-stored flag that could drift from that truth — the same
--- "pure junction, single source of truth" reasoning already applied to
--- electricity_bill_splits. That live-availability query is Edge Function logic (PR2), not
--- schema.
 --
--- Auto-provisioned: one bed per unit of capacity, the moment a room_unit is created.
--- Capacity is immutable in the current admin UI (a room_unit is only ever inserted, never
--- resized), so provisioning only needs to run on INSERT.
+-- No "held"/"occupied"/"available" status stored: those three are entirely a function of
+-- live `bookings`/`tenants` rows (an active hold, or an active tenant whose bed_id points
+-- here — see tenants.bed_id further down), never a separately-stored flag that could drift
+-- from that truth — the same "pure junction, single source of truth" reasoning already
+-- applied to electricity_bill_splits. `bed_is_available()` below is the one canonical,
+-- tested place that computation lives; PR2's Edge Functions call it rather than
+-- re-implementing it.
+--
+-- `under_maintenance` IS stored, because it's the one state that genuinely isn't
+-- derivable from anything else — an admin taking a bed out of service is an independent
+-- fact, not a consequence of a booking or tenant existing.
+--
+-- Auto-provisioned: one bed per unit of capacity. A trigger handles this for every
+-- room_unit created from now on; the backfill immediately below handles every room_unit
+-- that already existed before this migration (the trigger, being AFTER INSERT, never
+-- fires for rows that were already there). Capacity is immutable in the current admin UI
+-- (a room_unit is only ever inserted, never resized), so provisioning only needs to run
+-- on INSERT going forward.
 create table public.beds (
   id uuid primary key default gen_random_uuid(),
   room_unit_id uuid not null references public.room_units (id) on delete cascade,
   bed_label text not null,
+  under_maintenance boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (room_unit_id, bed_label)
@@ -111,6 +121,13 @@ create trigger provision_beds
   after insert on public.room_units
   for each row
   execute function public.provision_beds_for_room_unit();
+
+-- Backfill for room_units that already existed before this migration.
+insert into public.beds (room_unit_id, bed_label)
+select ru.id, 'Bed ' || gs.n
+from public.room_units ru
+cross join lateral generate_series(1, ru.capacity) as gs (n)
+where not exists (select 1 from public.beds b where b.room_unit_id = ru.id);
 
 -- ---------------------------------------------------------------------------------------
 -- Bookings: the entire pre-tenant lifecycle. hold -> otp_verified -> payment_pending ->
@@ -168,6 +185,28 @@ create unique index bookings_bed_id_active_key on public.bookings (bed_id)
 -- it needs to return a friendly "please log in" response rather than a constraint error).
 create unique index bookings_phone_active_key on public.bookings (phone)
   where status in ('hold', 'otp_verified', 'payment_pending');
+
+-- A bed under maintenance can never be held, even by an admin completing a manual booking.
+create or replace function public.bookings_bed_not_under_maintenance()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.status in ('hold', 'otp_verified', 'payment_pending')
+    and exists (select 1 from public.beds where id = new.bed_id and under_maintenance)
+  then
+    raise exception 'bookings: cannot hold a bed that is under maintenance';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger bed_not_under_maintenance
+  before insert or update of bed_id, status on public.bookings
+  for each row
+  execute function public.bookings_bed_not_under_maintenance();
 
 alter table public.bookings enable row level security;
 
@@ -234,3 +273,135 @@ create trigger audit_log_row
 -- ---------------------------------------------------------------------------------------
 -- Per-property opt-in (client answer: pilot on one property first, not live everywhere).
 alter table public.properties add column self_signup_enabled boolean not null default false;
+
+-- ---------------------------------------------------------------------------------------
+-- Bed-level tenant linkage, for the app's seat map (select room -> see which beds are
+-- selectable). Nullable: some already-existing tenants can't be cleanly backfilled (see
+-- below), and firebase_uid is already nullable for an analogous "not always known yet"
+-- reason. Going forward, both the tenant form (PR4) and the booking webhook (PR2) are
+-- expected to always set it — enforced at that layer, not here, same as how "an admin
+-- must fill in KYC eventually" isn't a NOT NULL constraint either.
+alter table public.tenants add column bed_id uuid references public.beds (id);
+
+-- At most one active tenant per bed — the actual seat-map correctness guard, enforced the
+-- same way as the bookings.bed_id guard above: a unique index, not application logic.
+create unique index tenants_bed_id_active_key on public.tenants (bed_id)
+  where status = 'active';
+
+-- Keeps bed_id and room_unit_id from ever disagreeing (same pattern as
+-- rooms_block_matches_property() in floors_and_blocks.sql), and blocks assigning a bed
+-- that's under maintenance to an active tenant.
+create or replace function public.tenants_bed_matches_room_unit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_bed_room_unit_id uuid;
+  v_under_maintenance boolean;
+begin
+  if new.bed_id is null then
+    return new;
+  end if;
+
+  select room_unit_id, under_maintenance into v_bed_room_unit_id, v_under_maintenance
+  from public.beds
+  where id = new.bed_id;
+
+  if v_bed_room_unit_id is distinct from new.room_unit_id then
+    raise exception 'tenants: bed_id does not belong to the tenant''s room_unit_id';
+  end if;
+
+  if new.status = 'active' and v_under_maintenance then
+    raise exception 'tenants: cannot assign a bed that is under maintenance';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger bed_matches_room_unit
+  before insert or update of bed_id, room_unit_id, status on public.tenants
+  for each row
+  execute function public.tenants_bed_matches_room_unit();
+
+-- Re-declare the tenant self-update guard (see the comment on this pattern in
+-- add_tenant_move_out_date.sql) to also protect bed_id from a tenant-initiated update.
+create or replace function public.tenants_tenant_update_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if current_user <> 'authenticated' or public.is_admin() then
+    return new;
+  end if;
+
+  if old.property_id is distinct from new.property_id
+    or old.room_unit_id is distinct from new.room_unit_id
+    or old.bed_id is distinct from new.bed_id
+    or old.full_name is distinct from new.full_name
+    or old.phone is distinct from new.phone
+    or old.firebase_uid is distinct from new.firebase_uid
+    or old.status is distinct from new.status
+    or old.kyc_status is distinct from new.kyc_status
+    or old.move_in_date is distinct from new.move_in_date
+    or old.move_out_date is distinct from new.move_out_date
+    or old.monthly_rent_paise is distinct from new.monthly_rent_paise
+    or old.billing_cycle is distinct from new.billing_cycle
+  then
+    raise exception 'tenants: only fcm_token may be updated by a tenant';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Backfill: assign existing active tenants to a distinct bed within their own room_unit,
+-- earliest move_in_date first, in bed-label order. Any room_unit that already had more
+-- active tenants than beds (only possible if an admin overrode the "room is full" warning
+-- in the tenant form) leaves the excess tenants with bed_id still null — there aren't
+-- enough physical beds to assign them one without guessing which is wrong. Those need a
+-- manual admin fix: the tenant form (PR4) will surface "no bed assigned" for anyone in
+-- this state so it's visible, not silently wrong.
+with ranked_tenants as (
+  select id, room_unit_id,
+    row_number() over (partition by room_unit_id order by move_in_date asc, id asc) as rn
+  from public.tenants
+  where status = 'active'
+),
+ranked_beds as (
+  select id as bed_id, room_unit_id,
+    row_number() over (partition by room_unit_id order by bed_label asc) as rn
+  from public.beds
+)
+update public.tenants t
+set bed_id = rb.bed_id
+from ranked_tenants rt
+join ranked_beds rb on rb.room_unit_id = rt.room_unit_id and rb.rn = rt.rn
+where t.id = rt.id;
+
+-- ---------------------------------------------------------------------------------------
+-- The one canonical availability computation — a bed is selectable in the app's seat map
+-- iff none of: under maintenance, occupied by an active tenant, or held by a live
+-- (unexpired) booking. PR2's list-availability Edge Function calls this rather than
+-- re-implementing the same logic; its response only ever carries a bed label and this
+-- boolean — never an occupant's name or any other tenant detail (there is none to leak:
+-- this function returns a single boolean, nothing else).
+create or replace function public.bed_is_available(p_bed_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select not exists (select 1 from public.beds where id = p_bed_id and under_maintenance)
+    and not exists (select 1 from public.tenants where bed_id = p_bed_id and status = 'active')
+    and not exists (
+      select 1 from public.bookings
+      where bed_id = p_bed_id
+        and status in ('hold', 'otp_verified', 'payment_pending')
+        and held_expires_at > now()
+    );
+$$;

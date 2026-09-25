@@ -72,22 +72,26 @@ insert into public.room_units (id, room_id, capacity) values
 
 -- Tenant A: active, KYC approved — should have full main-app access (dues/payments).
 insert into public.tenants (
-  id, property_id, room_unit_id, full_name, phone, firebase_uid, status, kyc_status,
+  id, property_id, room_unit_id, bed_id, full_name, phone, firebase_uid, status, kyc_status,
   move_in_date, monthly_rent_paise
 ) values (
   '66666666-6666-6666-6666-666666666666', '33333333-3333-3333-3333-333333333333',
-  'b4444444-4444-4444-4444-444444444444', 'Fake Tenant Approved', '+919876500001',
+  'b4444444-4444-4444-4444-444444444444',
+  (select id from public.beds where room_unit_id = 'b4444444-4444-4444-4444-444444444444' and bed_label = 'Bed 1'),
+  'Fake Tenant Approved', '+919876500001',
   'firebase-tenant-approved', 'active', 'approved', '2026-01-01', 1000000
 );
 
 -- Tenant B: active, KYC submitted but not yet approved — own row/consents/kyc only, no
 -- dues/payments.
 insert into public.tenants (
-  id, property_id, room_unit_id, full_name, phone, firebase_uid, status, kyc_status,
+  id, property_id, room_unit_id, bed_id, full_name, phone, firebase_uid, status, kyc_status,
   move_in_date, monthly_rent_paise
 ) values (
   '77777777-7777-7777-7777-777777777777', '33333333-3333-3333-3333-333333333333',
-  'b5555555-5555-5555-5555-555555555555', 'Fake Tenant Pending', '+919876500002',
+  'b5555555-5555-5555-5555-555555555555',
+  (select id from public.beds where room_unit_id = 'b5555555-5555-5555-5555-555555555555' and bed_label = 'Bed 1'),
+  'Fake Tenant Pending', '+919876500002',
   'firebase-tenant-pending', 'active', 'submitted', '2026-02-01', 1000000
 );
 
@@ -117,11 +121,13 @@ insert into public.kyc_submissions (
 -- gets set by the link-firebase-uid Edge Function on this tenant's first real login, the
 -- same as it would for a real tenant.
 insert into public.tenants (
-  id, property_id, room_unit_id, full_name, phone, status, kyc_status,
+  id, property_id, room_unit_id, bed_id, full_name, phone, status, kyc_status,
   move_in_date, monthly_rent_paise
 ) values (
   'f2222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333',
-  'b4444444-4444-4444-4444-444444444444', 'Fake Tenant Login Test', '+919398252518',
+  'b4444444-4444-4444-4444-444444444444',
+  (select id from public.beds where room_unit_id = 'b4444444-4444-4444-4444-444444444444' and bed_label = 'Bed 2'),
+  'Fake Tenant Login Test', '+919398252518',
   'active', 'not_started', '2026-09-01', 1000000
 );
 

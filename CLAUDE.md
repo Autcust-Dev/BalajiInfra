@@ -268,15 +268,27 @@ Create in migration order; adjust names only with good reason and update this fi
 - `room_units` — room_id, capacity. A room may have up to one unit each of single/double/
   triple (etc.) sharing; each unit is its own occupancy group and its own electricity-bill
   split, independent of whatever other units exist in the same room.
-- `beds` — room_unit_id, bed_label. One row per unit of capacity, auto-provisioned when a
-  room_unit is created. Used only to pin a self-signup hold to a specific physical slot
-  (see `bookings` below) — no stored status; availability is always computed live from
-  `bookings`/`tenants`, never a denormalized flag.
-- `tenants` — property_id, room_unit_id, full_name, phone (E.164, unique), firebase_uid
-  (nullable, unique, set on first login — or set immediately at creation for a
-  self-registered tenant, since their phone was already OTP-verified pre-payment),
-  status (`active | moved_out`), kyc_status (enum), move_in_date, move_out_date,
-  monthly_rent_paise, billing_cycle (`monthly | yearly`), fcm_token.
+- `beds` — room_unit_id, bed_label, under_maintenance. One row per unit of capacity,
+  auto-provisioned when a room_unit is created. Powers the app's seat map (a room's beds
+  shown as selectable/grayed-out) via `tenants.bed_id` below and self-signup holds via
+  `bookings.bed_id`. `under_maintenance` is the only stored state — it's the one thing
+  genuinely not derivable from bookings/tenants; everything else (held, occupied,
+  available) is computed live by `bed_is_available(bed_id)`, the single canonical
+  availability function every caller (admin panel, Edge Functions, pgTAP) uses rather
+  than re-implementing the same logic — never a denormalized status flag that could drift.
+- `tenants` — property_id, room_unit_id, bed_id (nullable — see note), full_name, phone
+  (E.164, unique), firebase_uid (nullable, unique, set on first login — or set immediately
+  at creation for a self-registered tenant, since their phone was already OTP-verified
+  pre-payment), status (`active | moved_out`), kyc_status (enum), move_in_date,
+  move_out_date, monthly_rent_paise, billing_cycle (`monthly | yearly`), fcm_token. At
+  most one active tenant per bed, enforced by a partial unique index on bed_id, and
+  bed_id must belong to the tenant's own room_unit_id, enforced by trigger. `bed_id` is
+  nullable because it was added after tenants already existed: a migration backfilled it
+  for every existing active tenant where a clean 1:1 room_unit→bed assignment was
+  possible, but any tenant in a room_unit an admin had already put over capacity (via the
+  tenant form's capacity-override warning) couldn't be assigned one and needs a manual
+  admin fix — the tenant form must surface "no bed assigned" for these. Going forward,
+  both the tenant form and the self-signup webhook are expected to always set it.
 - `consents` — tenant_id, policy_version, typed_full_name, accepted_at, app_version,
   device_info.
 - `kyc_submissions` — tenant_id, status, aadhaar_last4, aadhaar_path, selfie_path,
@@ -306,7 +318,10 @@ Create in migration order; adjust names only with good reason and update this fi
   the actual double-booking guard, not application logic. The `tenants` row is created
   only when a booking reaches `paid` (rule 1). No anon/authenticated access — reached only
   through service_role Edge Functions (and directly by admins, for the Bookings/Leads
-  page and manual-payment completion).
+  page and manual-payment completion). The app's seat map and the `list-availability`
+  response must never expose an occupant's name or any other tenant detail — only a bed
+  label and whether `bed_is_available()` says it's selectable; that function returns a
+  single boolean by design, so there's nothing to leak even if its result is inspected.
 - `whatsapp_invoice_log` — booking_id, status (`pending | sent | failed`),
   provider_message_id, error_message. Fire-and-forget from the payment webhook; the in-app
   invoice is the source of truth regardless of WhatsApp delivery.

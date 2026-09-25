@@ -130,6 +130,7 @@ export type Database = {
           created_at: string
           id: string
           room_unit_id: string
+          under_maintenance: boolean
           updated_at: string
         }
         Insert: {
@@ -137,6 +138,7 @@ export type Database = {
           created_at?: string
           id?: string
           room_unit_id: string
+          under_maintenance?: boolean
           updated_at?: string
         }
         Update: {
@@ -144,6 +146,7 @@ export type Database = {
           created_at?: string
           id?: string
           room_unit_id?: string
+          under_maintenance?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -872,6 +875,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          bed_id: string | null
           billing_cycle: Database["public"]["Enums"]["billing_cycle"]
           created_at: string
           fcm_token: string | null
@@ -889,6 +893,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bed_id?: string | null
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
           created_at?: string
           fcm_token?: string | null
@@ -906,6 +911,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bed_id?: string | null
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
           created_at?: string
           fcm_token?: string | null
@@ -923,6 +929,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tenants_bed_id_fkey"
+            columns: ["bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenants_property_id_fkey"
             columns: ["property_id"]
@@ -1017,6 +1030,7 @@ export type Database = {
     Functions: {
       _firebase_project_id: { Args: never; Returns: string }
       _jwt_sub_as_uuid: { Args: never; Returns: string }
+      bed_is_available: { Args: { p_bed_id: string }; Returns: boolean }
       current_tenant_id: { Args: never; Returns: string }
       delete_abandoned_bookings: { Args: never; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
