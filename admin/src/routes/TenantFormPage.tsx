@@ -648,23 +648,31 @@ export function TenantFormPage() {
           <FormField
             control={form.control}
             name="monthly_rent_rupees"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Rent amount (₹)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    placeholder="e.g. 10000"
-                    {...field}
-                    value={field.value || ''}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const isYearly = form.watch('billing_cycle') === 'yearly'
+              return (
+                <FormItem>
+                  <FormLabel>{isYearly ? 'Yearly rent amount (₹)' : 'Monthly rent amount (₹)'}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      placeholder={isYearly ? 'e.g. 120000 — the whole year, not a monthly rate' : 'e.g. 10000'}
+                      {...field}
+                      value={field.value || ''}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  {isYearly && (
+                    <p className="text-muted-foreground text-xs">
+                      Enter the full amount for the year, not a monthly rate.
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )
+            }}
           />
           <FormField
             control={form.control}

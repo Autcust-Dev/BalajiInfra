@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth-context'
 import { sharingTypeLabel } from '@/lib/rooms'
-import { dueTotalWithFines, formatPaise, rupeesToPaise } from '@/lib/validators'
+import { dueTotalWithFines, formatPaise, nextRentDueDate, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
 function usePropertiesQuery() {
@@ -96,11 +96,13 @@ function useRentsData(propertyId: string | undefined) {
 function AddRentDueButton({
   tenantId,
   amountPaise,
+  billingCycle,
   propertyId,
   hasUnpaidDue,
 }: {
   tenantId: string
   amountPaise: number
+  billingCycle: 'monthly' | 'yearly'
   propertyId: string
   hasUnpaidDue: boolean
 }) {
@@ -111,14 +113,16 @@ function AddRentDueButton({
   async function addDue() {
     if (!adminProfile) return
     setLoading(true)
-    const dueDate = new Date()
-    dueDate.setMonth(dueDate.getMonth() + 1, 0) // last day of current month
+    // amountPaise is already the full amount for one billing cycle (a yearly tenant's
+    // figure is their whole year, not a monthly rate — see the tenant form) — only the
+    // cadence differs: a monthly due is due at the end of this month, a yearly one a year
+    // from now.
     const { error } = await supabase.from('dues').insert({
       tenant_id: tenantId,
       type: 'rent',
-      description: 'Rent',
+      description: billingCycle === 'yearly' ? 'Yearly rent' : 'Rent',
       amount_paise: amountPaise,
-      due_date: dueDate.toISOString().slice(0, 10),
+      due_date: nextRentDueDate(billingCycle),
       status: 'unpaid',
       created_by: adminProfile.id,
     })
@@ -127,7 +131,7 @@ function AddRentDueButton({
       toast.error(error.message)
       return
     }
-    toast.success('Rent due added')
+    toast.success(billingCycle === 'yearly' ? 'Yearly rent due added' : 'Rent due added')
     await queryClient.invalidateQueries({ queryKey: ['rents', propertyId] })
   }
 
@@ -278,10 +282,19 @@ export function RentsPage() {
   const tenants = data?.tenants ?? []
   const duesByTenant: NonNullable<typeof data>['duesByTenant'] = data?.duesByTenant ?? new Map()
 
-  let totalExpected = 0
+  // Monthly and yearly tenants' rent figures are never summed together — a yearly amount
+  // is a whole year's rent, not a monthly rate, so blending it into "monthly expected"
+  // would wildly overstate it. Kept as two separate totals rather than normalized into one
+  // (e.g. yearly ÷ 12), so each number is exactly what it says, no derived math to second-guess.
+  let monthlyExpected = 0
+  let yearlyExpected = 0
   let totalPending = 0
   for (const tenant of tenants) {
-    totalExpected += tenant.monthly_rent_paise
+    if (tenant.billing_cycle === 'yearly') {
+      yearlyExpected += tenant.monthly_rent_paise
+    } else {
+      monthlyExpected += tenant.monthly_rent_paise
+    }
     const dues = duesByTenant.get(tenant.id) ?? []
     for (const due of dues) {
       if (due.status !== 'paid') totalPending += dueTotalWithFines(due)
@@ -307,14 +320,18 @@ export function RentsPage() {
       </div>
 
       {activePropertyId && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-md border p-4">
             <p className="text-muted-foreground text-xs">Active tenants</p>
             <p className="text-lg font-medium">{tenants.length}</p>
           </div>
           <div className="rounded-md border p-4">
             <p className="text-muted-foreground text-xs">Monthly rent expected</p>
-            <p className="text-lg font-medium">₹{formatPaise(totalExpected)}</p>
+            <p className="text-lg font-medium">₹{formatPaise(monthlyExpected)}</p>
+          </div>
+          <div className="rounded-md border p-4">
+            <p className="text-muted-foreground text-xs">Yearly rent expected</p>
+            <p className="text-lg font-medium">₹{formatPaise(yearlyExpected)}</p>
           </div>
           <div className="rounded-md border p-4">
             <p className="text-muted-foreground text-xs">Pending (unpaid dues + fines)</p>
@@ -329,7 +346,7 @@ export function RentsPage() {
             <TableHead>Tenant</TableHead>
             <TableHead>Room</TableHead>
             <TableHead>Cycle</TableHead>
-            <TableHead>Monthly rent</TableHead>
+            <TableHead>Rent</TableHead>
             <TableHead>Latest due</TableHead>
             <TableHead className="w-56" />
           </TableRow>
@@ -359,7 +376,12 @@ export function RentsPage() {
                   {tenant.room_units ? ` · ${sharingTypeLabel(tenant.room_units.capacity)}` : ''}
                 </TableCell>
                 <TableCell className="capitalize">{tenant.billing_cycle}</TableCell>
-                <TableCell>₹{formatPaise(tenant.monthly_rent_paise)}</TableCell>
+                <TableCell>
+                  ₹{formatPaise(tenant.monthly_rent_paise)}
+                  <span className="text-muted-foreground">
+                    {tenant.billing_cycle === 'yearly' ? '/yr' : '/mo'}
+                  </span>
+                </TableCell>
                 <TableCell>
                   {latestDue ? (
                     <Badge variant={latestDue.status === 'paid' ? 'secondary' : 'outline'}>
@@ -373,6 +395,7 @@ export function RentsPage() {
                   <AddRentDueButton
                     tenantId={tenant.id}
                     amountPaise={tenant.monthly_rent_paise}
+                    billingCycle={tenant.billing_cycle}
                     propertyId={activePropertyId!}
                     hasUnpaidDue={hasUnpaidDue}
                   />

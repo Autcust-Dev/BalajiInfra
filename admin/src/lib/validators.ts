@@ -80,3 +80,18 @@ export function dueTotalWithFines(due: {
 }): number {
   return due.amount_paise + due.fines.reduce((sum, f) => sum + f.amount_paise, 0)
 }
+
+/** When "Add rent due" generates a new due's date: the last day of the current month for a
+ * monthly tenant, or the last day of the same month one year out for a yearly one — never
+ * a monthly cadence for a yearly tenant, which is the actual bug this exists to prevent.
+ * `setDate(0)` rolls back to the end of the *previous* month, which is why advancing the
+ * month by one first (in both branches) is what actually lands on the end of the intended
+ * month — easy to get backwards, hence a named, tested function instead of inlining it. */
+export function nextRentDueDate(billingCycle: 'monthly' | 'yearly', from = new Date()): string {
+  const dueDate = new Date(from)
+  if (billingCycle === 'yearly') {
+    dueDate.setFullYear(dueDate.getFullYear() + 1)
+  }
+  dueDate.setMonth(dueDate.getMonth() + 1, 0)
+  return dueDate.toISOString().slice(0, 10)
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatPaise,
+  nextRentDueDate,
   normalizeIndianPhone,
   paiseToRupees,
   phoneSchema,
@@ -124,5 +125,27 @@ describe('formatPaise', () => {
 
   it('formats zero correctly', () => {
     expect(formatPaise(0)).toBe('0.00')
+  })
+})
+
+describe('nextRentDueDate', () => {
+  it('monthly: lands on the last day of the current month', () => {
+    expect(nextRentDueDate('monthly', new Date('2026-10-02'))).toBe('2026-10-31')
+  })
+
+  it('monthly: handles a date already on a month-end correctly', () => {
+    expect(nextRentDueDate('monthly', new Date('2026-02-01'))).toBe('2026-02-28')
+  })
+
+  it('yearly: lands on the last day of the SAME month, one year out — not the previous month (the actual bug this test exists to catch: naive date math landed on September instead of October)', () => {
+    expect(nextRentDueDate('yearly', new Date('2026-10-02'))).toBe('2027-10-31')
+  })
+
+  it('yearly: handles a December date without rolling into the wrong year', () => {
+    expect(nextRentDueDate('yearly', new Date('2026-12-15'))).toBe('2027-12-31')
+  })
+
+  it('yearly: handles a leap-year February correctly', () => {
+    expect(nextRentDueDate('yearly', new Date('2027-02-10'))).toBe('2028-02-29')
   })
 })
