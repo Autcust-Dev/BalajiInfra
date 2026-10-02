@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { flexRender, tableFeatures, useTable, type ColumnDef } from '@tanstack/react-table'
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -23,11 +23,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sharingTypeLabel } from '@/lib/rooms'
 import { formatPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database.types'
 
-type Tenant = Tables<'tenants'>
+type TenantRow = Tables<'tenants'> & {
+  properties: { name: string } | null
+  room_units: { capacity: number; rooms: { room_number: string } | null } | null
+}
 const PAGE_SIZE = 20
 
 // v9's minimal feature set — this table is fully server-driven (search/filter/pagination
@@ -38,7 +42,7 @@ const features = tableFeatures({})
 function buildColumns(
   selected: Set<string>,
   toggleSelected: (id: string) => void,
-): ColumnDef<typeof features, Tenant>[] {
+): ColumnDef<typeof features, TenantRow>[] {
   return [
     {
       id: 'select',
@@ -52,7 +56,22 @@ function buildColumns(
         ) : null,
     },
     { accessorKey: 'full_name', header: 'Name' },
+    {
+      id: 'tenant_code',
+      header: 'Tenant ID',
+      cell: ({ row }) => row.original.tenant_code ?? '—',
+    },
     { accessorKey: 'phone', header: 'Phone' },
+    {
+      id: 'room',
+      header: 'Room',
+      cell: ({ row }) => {
+        const roomUnit = row.original.room_units
+        if (!roomUnit) return '—'
+        const roomNumber = roomUnit.rooms?.room_number ?? '—'
+        return `${roomNumber} · ${sharingTypeLabel(roomUnit.capacity)}`
+      },
+    },
     {
       accessorKey: 'status',
       header: 'Status',
@@ -69,6 +88,11 @@ function buildColumns(
       cell: ({ row }) => `₹${formatPaise(row.original.monthly_rent_paise)}`,
     },
     {
+      accessorKey: 'advance_paise',
+      header: 'Advance',
+      cell: ({ row }) => `₹${formatPaise(row.original.advance_paise)}`,
+    },
+    {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
@@ -82,8 +106,8 @@ function buildColumns(
 
 export function TenantsPage() {
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | Tenant['status']>('all')
-  const [kycFilter, setKycFilter] = useState<'all' | Tenant['kyc_status']>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | TenantRow['status']>('all')
+  const [kycFilter, setKycFilter] = useState<'all' | TenantRow['kyc_status']>('all')
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
@@ -92,10 +116,15 @@ export function TenantsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['tenants', search, statusFilter, kycFilter, page],
     queryFn: async () => {
+      // Property alphabetical, then tenant id order within each property — tenants of the
+      // same property land in adjacent rows, with a group header rendered per break below.
       let query = supabase
         .from('tenants')
-        .select('*', { count: 'exact' })
-        .order('full_name')
+        .select('*, properties(name), room_units(capacity, rooms(room_number))', {
+          count: 'exact',
+        })
+        .order('name', { referencedTable: 'properties', ascending: true })
+        .order('tenant_code', { ascending: true, nullsFirst: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (search.trim()) {
@@ -106,7 +135,7 @@ export function TenantsPage() {
 
       const { data, error, count } = await query
       if (error) throw error
-      return { rows: data, total: count ?? 0 }
+      return { rows: data as TenantRow[], total: count ?? 0 }
     },
   })
 
@@ -245,15 +274,31 @@ export function TenantsPage() {
               </TableCell>
             </TableRow>
           )}
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getAllCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
+          {table.getRowModel().rows.map((row, index) => {
+            const propertyName = row.original.properties?.name ?? 'Unassigned'
+            const previousPropertyName =
+              index > 0 ? (data?.rows[index - 1]?.properties?.name ?? 'Unassigned') : null
+            const showGroupHeader = propertyName !== previousPropertyName
+
+            return (
+              <Fragment key={row.id}>
+                {showGroupHeader && (
+                  <TableRow key={`${propertyName}-header`} className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={columns.length} className="text-sm font-medium">
+                      {propertyName}
+                    </TableCell>
+                  </TableRow>
+                )}
+                <TableRow>
+                  {row.getAllCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </Fragment>
+            )
+          })}
         </TableBody>
       </Table>
 

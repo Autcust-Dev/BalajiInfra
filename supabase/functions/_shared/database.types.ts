@@ -904,6 +904,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          advance_paise: number
           bed_id: string | null
           billing_cycle: Database["public"]["Enums"]["billing_cycle"]
           created_at: string
@@ -923,6 +924,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          advance_paise?: number
           bed_id?: string | null
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
           created_at?: string
@@ -942,6 +944,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          advance_paise?: number
           bed_id?: string | null
           billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
           created_at?: string
