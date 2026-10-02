@@ -35,6 +35,15 @@ Core rules of the product:
    **within about a second**, without the user refreshing.
 5. Admins add rent/charges and record manual (cash/UPI) payments. Tenants can pay online
    via Razorpay.
+6. A tenant can be permanently deleted **only** once `status = 'moved_out'` **and** every
+   one of their `dues` is settled (`paid` or `cancelled` — none left `unpaid`), enforced by
+   a `before delete` trigger on `tenants`, not left to the admin panel to get right. This
+   exists specifically so a phone number isn't locked forever by an old, fully-settled
+   tenant record if that same person later rejoins. Deleting them cascades through their
+   now-fully-settled `dues`/`payments`/`fines`/electricity-bill splits — those rows only
+   survive deletion as long as the tenant they belong to does. An active tenant, or one
+   with any unpaid due, can never be deleted — the admin panel surfaces this back as "N
+   could not be deleted" rather than silently skipping them.
 
 ---
 
@@ -243,10 +252,11 @@ Never invent method names, config keys, or claims.
     audited. A `payments` row reaching `status = 'paid'` marks its `due` paid via a
     database trigger (`sync_due_status_from_payment`), not application code — this is
     what the admin panel's "Record payment" action relies on, and what the future
-    Razorpay webhook must also rely on rather than writing `dues.status` itself. `dues`/
-    `payments` rows are never deleted once created (rule 9's "no DELETE grant" pattern
-    applies here too) — a tenant with any financial history, paid or not, can never be
-    hard-deleted, by design.
+    Razorpay webhook must also rely on rather than writing `dues.status` itself.
+    `dues`/`payments`/`fines` rows are never deleted or edited away from the truth on
+    their own (no DELETE grant, rule 9's pattern) **except** as a side effect of deleting
+    the tenant they belong to once every one of that tenant's dues is settled (paid or
+    cancelled) — see rule 6 (product rules, §1).
 
 ### App behaviour
 28. Route guard order: not logged in → login; no consent → consent; KYC not approved
