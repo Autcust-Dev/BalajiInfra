@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { paiseToRupees } from '@/lib/validators'
+import { formatPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database.types'
 
@@ -66,8 +66,7 @@ function buildColumns(
     {
       accessorKey: 'monthly_rent_paise',
       header: 'Rent',
-      cell: ({ row }) =>
-        `₹${paiseToRupees(row.original.monthly_rent_paise).toLocaleString('en-IN')}`,
+      cell: ({ row }) => `₹${formatPaise(row.original.monthly_rent_paise)}`,
     },
     {
       id: 'actions',

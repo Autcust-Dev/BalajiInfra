@@ -39,7 +39,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { sharingTypeLabel } from '@/lib/rooms'
-import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
+import { formatPaise, rupeesToPaise } from '@/lib/validators'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 
@@ -353,9 +353,7 @@ export function EBillsPage() {
                   year: 'numeric',
                 })}
               </TableCell>
-              <TableCell>
-                ₹{paiseToRupees(bill.total_amount_paise).toLocaleString('en-IN')}
-              </TableCell>
+              <TableCell>₹{formatPaise(bill.total_amount_paise)}</TableCell>
               <TableCell className="text-right">
                 <Button asChild variant="outline" size="sm">
                   <Link to={`/ebills/${bill.id}`}>Details</Link>

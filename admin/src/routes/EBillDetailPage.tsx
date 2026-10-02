@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { sharingTypeLabel } from '@/lib/rooms'
-import { paiseToRupees, rupeesToPaise } from '@/lib/validators'
+import { formatPaise, paiseToRupees, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
 function useBillDetail(billId: string) {
@@ -74,7 +74,7 @@ function EditableAmount({
   }
 
   if (locked) {
-    return <span>₹{paiseToRupees(amountPaise).toLocaleString('en-IN')}</span>
+    return <span>₹{formatPaise(amountPaise)}</span>
   }
 
   if (!editing) {
@@ -87,7 +87,7 @@ function EditableAmount({
           setEditing(true)
         }}
       >
-        ₹{paiseToRupees(amountPaise).toLocaleString('en-IN')}
+        ₹{formatPaise(amountPaise)}
       </button>
     )
   }
@@ -137,7 +137,7 @@ export function EBillDetailPage() {
             month: 'long',
             year: 'numeric',
           })}{' '}
-          · Total ₹{paiseToRupees(bill.total_amount_paise).toLocaleString('en-IN')}
+          · Total ₹{formatPaise(bill.total_amount_paise)}
         </p>
       </div>
 
@@ -184,8 +184,7 @@ export function EBillDetailPage() {
       </Table>
 
       <p className="text-muted-foreground text-sm">
-        Sum of shares: ₹{paiseToRupees(total).toLocaleString('en-IN')} (bill total ₹
-        {paiseToRupees(bill.total_amount_paise).toLocaleString('en-IN')})
+        Sum of shares: ₹{formatPaise(total)} (bill total ₹{formatPaise(bill.total_amount_paise)})
       </p>
     </div>
   )

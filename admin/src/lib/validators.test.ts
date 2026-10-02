@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatPaise,
   normalizeIndianPhone,
   paiseToRupees,
   phoneSchema,
@@ -101,5 +102,27 @@ describe('rupeesToPaise / paiseToRupees', () => {
     for (const rupees of [1, 999, 10000, 123456]) {
       expect(paiseToRupees(rupeesToPaise(rupees))).toBe(rupees)
     }
+  })
+})
+
+describe('formatPaise', () => {
+  it('always shows exactly two decimal places, even for a whole-rupee amount', () => {
+    expect(formatPaise(1000000)).toBe('10,000.00')
+  })
+
+  it('never truncates a trailing zero (the bug this exists to prevent — ₹500.5 read as a wrong amount, not a rounding choice)', () => {
+    expect(formatPaise(50050)).toBe('500.50')
+  })
+
+  it('formats a single non-zero decimal digit correctly', () => {
+    expect(formatPaise(50001)).toBe('500.01')
+  })
+
+  it('applies Indian digit grouping for larger amounts', () => {
+    expect(formatPaise(123456789)).toBe('12,34,567.89')
+  })
+
+  it('formats zero correctly', () => {
+    expect(formatPaise(0)).toBe('0.00')
   })
 })

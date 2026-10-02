@@ -51,3 +51,15 @@ export function rupeesToPaise(rupees: number): number {
 export function paiseToRupees(paise: number): number {
   return paise / 100
 }
+
+/** The one place paise gets turned into a displayed rupee amount — always exactly two
+ * decimal places (₹500.50, never ₹500.5), since this shows up on tenant-facing invoices
+ * as well as admin screens and a truncated decimal reads as a wrong amount, not a
+ * rounding choice. Callers still supply the ₹ prefix themselves (`₹{formatPaise(x)}`) —
+ * this only owns the numeric formatting. */
+export function formatPaise(paise: number): string {
+  return paiseToRupees(paise).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
