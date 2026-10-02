@@ -139,7 +139,9 @@ export function TenantsPage() {
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (search.trim()) {
-        query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`)
+        query = query.or(
+          `full_name.ilike.%${search}%,phone.ilike.%${search}%,tenant_code.ilike.%${search}%`,
+        )
       }
       if (statusFilter !== 'all') query = query.eq('status', statusFilter)
       if (kycFilter !== 'all') query = query.eq('kyc_status', kycFilter)
@@ -202,7 +204,7 @@ export function TenantsPage() {
 
       <div className="flex flex-wrap gap-2">
         <Input
-          placeholder="Search name or phone…"
+          placeholder="Search name, phone, or tenant ID…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
