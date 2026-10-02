@@ -312,10 +312,20 @@ Create in migration order; adjust names only with good reason and update this fi
   (nullable — see note), full_name, phone (E.164, unique), firebase_uid (nullable, unique,
   set on first login — or set immediately at creation for a self-registered tenant, since
   their phone was already OTP-verified pre-payment), status (`active | moved_out`),
-  kyc_status (enum), move_in_date, move_out_date, monthly_rent_paise, advance_paise
-  (a flat up-front amount collected from the tenant — distinct from a security-deposit due,
-  which is its own dues/payments row with a full audit trail; no refund/history tracking
-  yet, additive if that's ever needed), billing_cycle (`monthly | yearly`), fcm_token. At
+  kyc_status (enum), move_in_date, move_out_date, monthly_rent_paise (despite the column
+  name, this is **the full amount for one billing cycle** — for a `yearly` tenant it's
+  their whole year's rent, never a monthly rate to be multiplied by 12; the tenant form's
+  label and the admin screens that display it make this explicit per-tenant since the
+  column name alone doesn't, which is exactly what caused a real bug — yearly amounts
+  summed into a "monthly rent expected" dashboard total as if they were monthly figures.
+  Monthly and yearly tenants' amounts must never be summed together in any report — the
+  column itself is left as-is rather than renamed (pre-launch, low churn risk either way),
+  but any new screen that reads it must branch on billing_cycle, not assume a flat
+  per-month rate),
+  advance_paise (a flat up-front amount collected from the tenant — distinct from a
+  security-deposit due, which is its own dues/payments row with a full audit trail; no
+  refund/history tracking yet, additive if that's ever needed), billing_cycle
+  (`monthly | yearly`), fcm_token. At
   most one active tenant per bed, enforced by a
   partial unique index on bed_id, and bed_id must belong to the tenant's own
   room_unit_id, enforced by trigger. `bed_id` is nullable because it was added after

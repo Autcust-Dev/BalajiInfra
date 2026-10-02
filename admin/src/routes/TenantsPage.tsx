@@ -96,7 +96,8 @@ function buildColumns(
     {
       accessorKey: 'monthly_rent_paise',
       header: 'Rent',
-      cell: ({ row }) => `₹${formatPaise(row.original.monthly_rent_paise)}`,
+      cell: ({ row }) =>
+        `₹${formatPaise(row.original.monthly_rent_paise)}${row.original.billing_cycle === 'yearly' ? '/yr' : '/mo'}`,
     },
     {
       accessorKey: 'advance_paise',
