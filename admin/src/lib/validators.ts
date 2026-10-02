@@ -63,3 +63,13 @@ export function formatPaise(paise: number): string {
     maximumFractionDigits: 2,
   })
 }
+
+/** A due's true total owed is its own amount plus the sum of its fines — never a stored/
+ * computed column (see the comment on the fines table), so every screen that shows a due's
+ * total calls this one function rather than re-deriving the same formula. */
+export function dueTotalWithFines(due: {
+  amount_paise: number
+  fines: { amount_paise: number }[]
+}): number {
+  return due.amount_paise + due.fines.reduce((sum, f) => sum + f.amount_paise, 0)
+}

@@ -18,6 +18,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
   Form,
   FormControl,
   FormField,
@@ -33,10 +40,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useAuth } from '@/lib/auth-context'
 import { sharingTypeLabel } from '@/lib/rooms'
 import {
   phoneSchema,
   rupeesSchema,
+  dueTotalWithFines,
   formatPaise,
   paiseToRupees,
   rupeesToPaise,
@@ -130,19 +139,170 @@ function useTenantRoomInfo(roomUnitId: string | undefined) {
   })
 }
 
-function useUnpaidDuesTotal(tenantId: string) {
+function useUnpaidDues(tenantId: string) {
   return useQuery({
-    queryKey: ['unpaid-dues-total', tenantId],
+    queryKey: ['unpaid-dues', tenantId],
+    enabled: !!tenantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('dues')
-        .select('amount_paise')
+        .select('id, type, description, amount_paise, due_date, fines(amount_paise)')
         .eq('tenant_id', tenantId)
         .eq('status', 'unpaid')
+        .order('due_date')
       if (error) throw error
-      return data.reduce((sum, d) => sum + d.amount_paise, 0)
+      return data
     },
   })
+}
+
+const recordPaymentSchema = z.object({
+  amount_rupees: z.number({ error: 'Enter the amount received' }).positive('Must be greater than zero'),
+  method: z.string().optional(),
+  paid_on: z.string().min(1, 'Select the date it was received'),
+})
+type RecordPaymentValues = z.infer<typeof recordPaymentSchema>
+
+/** Marking a due paid here is how an admin resolves money received outside Razorpay (cash,
+ * UPI, bank transfer) — CLAUDE.md rule 27. This is also, in practice, the only way to clear
+ * the path to deleting a moved-out tenant: dues.tenant_id deliberately has no cascade (a
+ * real debt can't just vanish by deleting the tenant), so an unpaid due has to be resolved
+ * first. Inserting a payments row with status='paid' is enough — a trigger
+ * (sync_due_status_from_payment) flips the due to paid, not app code here. */
+function RecordPaymentDialog({
+  due,
+  tenantId,
+  propertyId,
+}: {
+  due: { id: string; amount_paise: number; fines: { amount_paise: number }[] }
+  tenantId: string
+  propertyId: string
+}) {
+  const [open, setOpen] = useState(false)
+  const queryClient = useQueryClient()
+  const { adminProfile } = useAuth()
+  const totalOwed = dueTotalWithFines(due)
+  const form = useForm<RecordPaymentValues>({
+    resolver: zodResolver(recordPaymentSchema),
+    defaultValues: {
+      amount_rupees: paiseToRupees(totalOwed),
+      method: '',
+      paid_on: new Date().toISOString().slice(0, 10),
+    },
+  })
+
+  async function onSubmit(values: RecordPaymentValues) {
+    if (!adminProfile) return
+    const { error } = await supabase.from('payments').insert({
+      due_id: due.id,
+      tenant_id: tenantId,
+      amount_paise: rupeesToPaise(values.amount_rupees),
+      source: 'manual',
+      status: 'paid',
+      method: values.method || null,
+      paid_at: new Date(values.paid_on).toISOString(),
+      recorded_by: adminProfile.id,
+    })
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+    toast.success('Payment recorded — due marked paid')
+    await queryClient.invalidateQueries({ queryKey: ['unpaid-dues', tenantId] })
+    await queryClient.invalidateQueries({ queryKey: ['rents', propertyId] })
+    setOpen(false)
+    form.reset()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Record payment
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Record payment</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="amount_rupees"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Amount received (₹)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step="0.01"
+                      {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="method"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Method (optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Cash, UPI, bank transfer…" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="paid_on"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date received</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+              Mark due paid
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function UnpaidDuesCard({ tenantId, propertyId }: { tenantId: string; propertyId: string }) {
+  const { data: dues, isLoading } = useUnpaidDues(tenantId)
+
+  if (isLoading || !dues || dues.length === 0) return null
+
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-sm font-medium">Unpaid dues</p>
+      <ul className="space-y-2">
+        {dues.map((due) => (
+          <li key={due.id} className="flex items-center justify-between gap-2 text-sm">
+            <span>
+              {due.type} — ₹{formatPaise(dueTotalWithFines(due))}
+              {due.description ? ` (${due.description})` : ''}
+            </span>
+            <RecordPaymentDialog due={due} tenantId={tenantId} propertyId={propertyId} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 function MoveOutDialog({ tenantId, tenantName }: { tenantId: string; tenantName: string }) {
@@ -151,7 +311,8 @@ function MoveOutDialog({ tenantId, tenantName }: { tenantId: string; tenantName:
   const [submitting, setSubmitting] = useState(false)
   // Admin can still move the tenant out — this is a warning, not a hard block: real-world
   // write-offs and disputes happen, and the due stays against the tenant either way.
-  const { data: unpaidTotal } = useUnpaidDuesTotal(tenantId)
+  const { data: unpaidDues } = useUnpaidDues(tenantId)
+  const unpaidTotal = unpaidDues?.reduce((sum, d) => sum + dueTotalWithFines(d), 0) ?? 0
 
   async function confirmMoveOut() {
     setSubmitting(true)
@@ -179,7 +340,7 @@ function MoveOutDialog({ tenantId, tenantName }: { tenantId: string; tenantName:
           <AlertDialogDescription>
             This immediately revokes all of their app access — they won't even be able to see their
             own tenant record anymore. This can't be undone from the app.
-            {!!unpaidTotal && unpaidTotal > 0 && (
+            {unpaidTotal > 0 && (
               <span className="text-destructive mt-2 block font-medium">
                 This tenant has ₹{formatPaise(unpaidTotal)} unpaid — move out anyway?
               </span>
@@ -315,6 +476,10 @@ export function TenantFormPage() {
           <MoveOutDialog tenantId={tenant.id} tenantName={tenant.full_name} />
         )}
       </div>
+
+      {isEditing && tenant && (
+        <UnpaidDuesCard tenantId={tenant.id} propertyId={tenant.property_id} />
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

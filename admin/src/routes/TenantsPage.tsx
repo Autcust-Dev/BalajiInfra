@@ -132,7 +132,7 @@ export function TenantsPage() {
     await queryClient.invalidateQueries({ queryKey: ['tenants'] })
     if (failed > 0) {
       toast.error(
-        `${ids.length - failed} deleted, ${failed} could not be deleted — they likely have dues or payment history.`,
+        `${ids.length - failed} deleted, ${failed} could not be deleted — they have dues or payment history, which is permanent even once paid off.`,
       )
     } else {
       toast.success(`${ids.length} tenant${ids.length === 1 ? '' : 's'} deleted`)

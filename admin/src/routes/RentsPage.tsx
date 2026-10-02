@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth-context'
 import { sharingTypeLabel } from '@/lib/rooms'
-import { formatPaise, rupeesToPaise } from '@/lib/validators'
+import { dueTotalWithFines, formatPaise, rupeesToPaise } from '@/lib/validators'
 import { supabase } from '@/lib/supabase'
 
 function usePropertiesQuery() {
@@ -92,9 +92,6 @@ function useRentsData(propertyId: string | undefined) {
   })
 }
 
-function dueTotal(due: { amount_paise: number; fines: { amount_paise: number }[] }) {
-  return due.amount_paise + due.fines.reduce((sum, f) => sum + f.amount_paise, 0)
-}
 
 function AddRentDueButton({
   tenantId,
@@ -287,7 +284,7 @@ export function RentsPage() {
     totalExpected += tenant.monthly_rent_paise
     const dues = duesByTenant.get(tenant.id) ?? []
     for (const due of dues) {
-      if (due.status !== 'paid') totalPending += dueTotal(due)
+      if (due.status !== 'paid') totalPending += dueTotalWithFines(due)
     }
   }
 
@@ -366,7 +363,7 @@ export function RentsPage() {
                 <TableCell>
                   {latestDue ? (
                     <Badge variant={latestDue.status === 'paid' ? 'secondary' : 'outline'}>
-                      ₹{formatPaise(dueTotal(latestDue))} · {latestDue.status}
+                      ₹{formatPaise(dueTotalWithFines(latestDue))} · {latestDue.status}
                     </Badge>
                   ) : (
                     <span className="text-muted-foreground text-sm">No dues yet</span>
