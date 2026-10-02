@@ -72,6 +72,11 @@ select ok(
   (select tenant_code from public.tenants where full_name = 'Test Tenant One') < 'FP-2027-0000',
   'sanity: the fresh code is within the current year'
 );
+-- Deletion requires moved_out + no unpaid dues (see 021_tenant_delete_rejoin.sql for the
+-- dedicated coverage of that guard); this tenant has no dues at all, so moving them out
+-- first is enough to satisfy it for this sequence-reuse test.
+update public.tenants set status = 'moved_out', move_out_date = current_date
+  where full_name = 'Test Tenant One';
 delete from public.tenants where full_name = 'Test Tenant One';
 select lives_ok(
   $$ insert into public.tenants (property_id, room_unit_id, full_name, phone, status, kyc_status, move_in_date, monthly_rent_paise)

@@ -4,6 +4,17 @@ import { Plus } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -161,7 +172,7 @@ export function TenantsPage() {
     await queryClient.invalidateQueries({ queryKey: ['tenants'] })
     if (failed > 0) {
       toast.error(
-        `${ids.length - failed} deleted, ${failed} could not be deleted — they have dues or payment history, which is permanent even once paid off.`,
+        `${ids.length - failed} deleted, ${failed} could not be deleted — they still have an unpaid due. Settle or cancel it first, then delete again.`,
       )
     } else {
       toast.success(`${ids.length} tenant${ids.length === 1 ? '' : 's'} deleted`)
@@ -238,14 +249,28 @@ export function TenantsPage() {
       {selected.size > 0 && (
         <div className="bg-muted flex items-center justify-between rounded-md p-2">
           <span className="text-sm">{selected.size} selected</span>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={() => void bulkDelete()}
-            disabled={deleting}
-          >
-            Delete selected
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="destructive" disabled={deleting}>
+                Delete selected
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {selected.size} tenant(s)?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently deletes each selected tenant along with their dues,
+                  payments, and fines — only tenants with no unpaid due will actually be
+                  deleted; this cannot be undone. Any with an unpaid due are skipped and
+                  reported back, not deleted.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void bulkDelete()}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 
