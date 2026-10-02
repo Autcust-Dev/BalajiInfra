@@ -45,6 +45,7 @@ import { sharingTypeLabel } from '@/lib/rooms'
 import {
   phoneSchema,
   rupeesSchema,
+  advanceRupeesSchema,
   dueTotalWithFines,
   formatPaise,
   paiseToRupees,
@@ -61,6 +62,7 @@ const tenantFormSchema = z.object({
   move_in_date: z.string().min(1, 'Move-in date is required'),
   billing_cycle: z.enum(['monthly', 'yearly']),
   monthly_rent_rupees: rupeesSchema,
+  advance_rupees: advanceRupeesSchema,
 })
 type TenantFormValues = z.infer<typeof tenantFormSchema>
 
@@ -405,6 +407,7 @@ export function TenantFormPage() {
       move_in_date: new Date().toISOString().slice(0, 10),
       billing_cycle: 'monthly',
       monthly_rent_rupees: 0,
+      advance_rupees: 0,
     },
   })
 
@@ -428,6 +431,7 @@ export function TenantFormPage() {
         move_in_date: tenant.move_in_date,
         billing_cycle: tenant.billing_cycle,
         monthly_rent_rupees: paiseToRupees(tenant.monthly_rent_paise),
+        advance_rupees: paiseToRupees(tenant.advance_paise),
       })
     }
   }, [tenant, tenantRoomInfo, form])
@@ -444,6 +448,7 @@ export function TenantFormPage() {
       move_in_date: values.move_in_date,
       billing_cycle: values.billing_cycle,
       monthly_rent_paise: rupeesToPaise(values.monthly_rent_rupees),
+      advance_paise: rupeesToPaise(values.advance_rupees),
     }
 
     const { error } = isEditing
@@ -651,7 +656,30 @@ export function TenantFormPage() {
                     type="number"
                     min={1}
                     step={1}
+                    placeholder="e.g. 10000"
                     {...field}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(Number(e.target.value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="advance_rupees"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Advance (₹)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="0 if none collected"
+                    {...field}
+                    value={field.value || ''}
                     onChange={(e) => field.onChange(Number(e.target.value))}
                   />
                 </FormControl>

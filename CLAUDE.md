@@ -240,7 +240,13 @@ Never invent method names, config keys, or claims.
     and a `webhook_events` table keyed by event id. Processing the same event twice
     must change nothing.
 27. Manual payments: recorded by an admin, `source = 'manual'`, `recorded_by` set,
-    audited.
+    audited. A `payments` row reaching `status = 'paid'` marks its `due` paid via a
+    database trigger (`sync_due_status_from_payment`), not application code — this is
+    what the admin panel's "Record payment" action relies on, and what the future
+    Razorpay webhook must also rely on rather than writing `dues.status` itself. `dues`/
+    `payments` rows are never deleted once created (rule 9's "no DELETE grant" pattern
+    applies here too) — a tenant with any financial history, paid or not, can never be
+    hard-deleted, by design.
 
 ### App behaviour
 28. Route guard order: not logged in → login; no consent → consent; KYC not approved
@@ -296,8 +302,11 @@ Create in migration order; adjust names only with good reason and update this fi
   (nullable — see note), full_name, phone (E.164, unique), firebase_uid (nullable, unique,
   set on first login — or set immediately at creation for a self-registered tenant, since
   their phone was already OTP-verified pre-payment), status (`active | moved_out`),
-  kyc_status (enum), move_in_date, move_out_date, monthly_rent_paise, billing_cycle
-  (`monthly | yearly`), fcm_token. At most one active tenant per bed, enforced by a
+  kyc_status (enum), move_in_date, move_out_date, monthly_rent_paise, advance_paise
+  (a flat up-front amount collected from the tenant — distinct from a security-deposit due,
+  which is its own dues/payments row with a full audit trail; no refund/history tracking
+  yet, additive if that's ever needed), billing_cycle (`monthly | yearly`), fcm_token. At
+  most one active tenant per bed, enforced by a
   partial unique index on bed_id, and bed_id must belong to the tenant's own
   room_unit_id, enforced by trigger. `bed_id` is nullable because it was added after
   tenants already existed: a migration backfilled it for every existing active tenant

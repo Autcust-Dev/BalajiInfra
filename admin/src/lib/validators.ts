@@ -44,6 +44,13 @@ export const rupeesSchema = z
   .int('Rent must be a whole number of rupees, no decimals')
   .positive('Rent must be greater than zero')
 
+/** Same whole-rupee treatment as rent, but zero is valid — not every tenant has an advance
+ * collected. */
+export const advanceRupeesSchema = z
+  .number({ error: 'Enter the advance amount in rupees' })
+  .int('Advance must be a whole number of rupees, no decimals')
+  .nonnegative('Advance cannot be negative')
+
 export function rupeesToPaise(rupees: number): number {
   return rupees * 100
 }
