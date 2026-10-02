@@ -40,3 +40,5 @@ supabase/.temp/
 # Logs
 *.log
 npm-debug.log*
+
+backup-before-phase4/
